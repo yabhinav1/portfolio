@@ -1,4 +1,4 @@
-import { esc, md, list } from '../lib.js'
+import { esc, md, list, fill } from '../lib.js'
 
 const abs = (s, u) => !u ? '' : /^https?:/.test(u) ? u : `${s.site}${u}`
 
@@ -61,11 +61,11 @@ const footer = s => {
 </footer>`
 }
 
-const workRow = p => `
+const workRow = (p, st) => `
 <a class="row" href="/work/${esc(p.slug)}">
   <span class="row-t">
     <b>${esc(p.title)}</b>
-    ${p.summary ? `<em>${esc(p.summary)}</em>` : ''}
+    ${p.summary ? `<em>${esc(fill(p.summary, st))}</em>` : ''}
     ${p.tags ? `<span class="tags">${list(p.tags).map(t => `<i>${esc(t)}</i>`).join('')}</span>` : ''}
   </span>
   <span class="row-m">
@@ -75,7 +75,7 @@ const workRow = p => `
   </span>
 </a>`
 
-export const homePage = ({ s, projects, experience, skills, sent }) => layout({
+export const homePage = ({ s, projects, experience, skills, sent, stats = {} }) => layout({
   s,
   body: `${header(s)}
 <main id="main">
@@ -91,7 +91,7 @@ export const homePage = ({ s, projects, experience, skills, sent }) => layout({
 <section id="work" class="block">
   <h2 class="kick"><span>Selected work</span><b>${projects.length}</b></h2>
   ${projects.length
-      ? `<div class="rows">${projects.map(workRow).join('')}</div>`
+      ? `<div class="rows">${projects.map(p => workRow(p, stats)).join('')}</div>`
       : `<p class="empty">No projects yet. Add the first one in <a href="/admin/projects/new">the admin panel</a>.</p>`}
 </section>
 
@@ -140,7 +140,7 @@ ${experience.length ? `<section class="block">
 </main>${footer(s)}`,
 })
 
-export const projectPage = ({ s, p, next }) => layout({
+export const projectPage = ({ s, p, next, stats = {} }) => layout({
   s, title: `${p.title} — ${s.name}`, cls: 'sub', image: p.image,
   body: `${header(s)}
 <main id="main">
@@ -148,14 +148,14 @@ export const projectPage = ({ s, p, next }) => layout({
   <a class="back" href="/#work">← All work</a>
   <p class="kick"><span>${esc(p.year || 'Project')}</span></p>
   <h1>${esc(p.title)}</h1>
-  ${p.summary ? `<p class="lede">${esc(p.summary)}</p>` : ''}
+  ${p.summary ? `<p class="lede">${esc(fill(p.summary, stats))}</p>` : ''}
   <div class="caseMeta">
     ${p.tags ? `<div><dt>Built with</dt><dd>${list(p.tags).map(t => `<i>${esc(t)}</i>`).join('')}</dd></div>` : ''}
     ${p.link ? `<div><dt>Live</dt><dd><a href="${esc(p.link)}" rel="noopener">Visit site →</a></dd></div>` : ''}
     ${p.repo ? `<div><dt>Code</dt><dd><a href="${esc(p.repo)}" rel="noopener">Repository →</a></dd></div>` : ''}
   </div>
   ${p.image ? `<img class="hero" src="${esc(p.image)}" alt="${esc(p.title)}">` : ''}
-  <div class="prose wide">${md(p.description)}</div>
+  <div class="prose wide">${md(fill(p.description, stats))}</div>
   <p class="next">${next ? `<a href="/work/${esc(next.slug)}">Next — ${esc(next.title)} →</a>` : ''}
     <a href="/#contact">Want something like this? Get in touch →</a></p>
 </article>

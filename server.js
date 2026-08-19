@@ -50,6 +50,51 @@ const getSettings = async () => {
 }
 const setSetting = (k, v) => run('insert into settings(key,value) values(?,?) on conflict(key) do update set value=excluded.value', k, v)
 
+/* ---------- live stats, refreshed in the background ---------- */
+const STATS_URL = 'https://annie.monster/api/status'
+const STATS_TTL = 6 * 3600e3
+let refreshing = false
+
+const refreshStats = async () => {
+  if (refreshing) return
+  refreshing = true
+  try {
+    const r = await fetch(STATS_URL, { signal: AbortSignal.timeout(5000) })
+    if (!r.ok) throw new Error(`status ${r.status}`)
+    const j = await r.json()
+    if (typeof j.guilds !== 'number' || typeof j.users !== 'number') throw new Error('unexpected shape')
+    await Promise.all([
+      setSetting('stat_servers', String(j.guilds)),
+      setSetting('stat_users', String(j.users)),
+      setSetting('stat_ping', String(j.ping ?? '')),
+      setSetting('stat_at', String(Date.now())),
+    ])
+  } catch (e) {
+    console.warn('stats refresh failed:', e.message)
+    await setSetting('stat_at', String(Date.now()))   // back off instead of retrying every request
+  } finally {
+    refreshing = false
+  }
+}
+
+// Renders from the stored values so a page never waits on the network. If they are
+// stale the refresh runs after the response, and the next visitor sees the new ones.
+const shape = (s) => {
+  const n = v => Number(v || 0).toLocaleString('en-US')
+  return {
+    servers: n(s.stat_servers), users: n(s.stat_users), ping: s.stat_ping || '',
+    users_k: Math.floor(Number(s.stat_users || 0) / 1000) + 'k',
+  }
+}
+
+const statsFor = async (s) => {
+  if (Date.now() - Number(s.stat_at || 0) < STATS_TTL) return shape(s)
+  // Nothing stored yet (fresh deploy): wait, otherwise the page would print zeros.
+  if (!s.stat_servers) { await refreshStats(); return shape(await getSettings()) }
+  refreshStats()
+  return shape(s)
+}
+
 /* ---------- entities: one spec drives list, form, save, delete ---------- */
 const ENTITIES = {
   projects: {
@@ -156,13 +201,16 @@ app.use('/public', express.static(path.join(root, 'public'), { maxAge: '1h' }))
 if (!BLOB) app.use('/uploads', express.static(path.join(DATA, 'uploads'), { maxAge: '7d' }))
 
 /* ---------- public site ---------- */
-app.get('/', async (req, res) => res.send(homePage({
-  s: await getSettings(),
+app.get('/', async (req, res) => {
+  const s = await getSettings()
+  res.send(homePage({
+  s, stats: await statsFor(s),
   projects: await all('select * from projects where published = 1 order by position asc, id desc'),
   experience: await rowsOf('experience'),
   skills: await rowsOf('skills'),
   sent: 'sent' in req.query,
-})))
+}))
+})
 
 app.get('/work/:slug', async (req, res) => {
   const p = await get('select * from projects where slug = ? and published = 1', req.params.slug)
@@ -170,7 +218,7 @@ app.get('/work/:slug', async (req, res) => {
   if (!p) return res.status(404).send(notFound(s))
   const list = await all('select slug, title from projects where published = 1 order by position asc, id desc')
   const i = list.findIndex(x => x.slug === p.slug)
-  res.send(projectPage({ s, p, next: list.length > 1 ? list[(i + 1) % list.length] : null }))
+  res.send(projectPage({ s, p, stats: await statsFor(s), next: list.length > 1 ? list[(i + 1) % list.length] : null }))
 })
 
 app.get('/robots.txt', (_req, res) => res.type('text/plain')
