@@ -3,7 +3,7 @@
 **A portfolio site you edit from a browser, not a text editor.** Server-rendered
 Node, SQLite, and a `/admin` panel for projects, experience, skills and the
 contact inbox. No build step, no frontend framework, and two runtime
-dependencies total — `express` and `multer`.
+dependencies in the local path — `express` and `multer`.
 
 ![The portfolio homepage](docs/screenshot.png)
 
@@ -15,7 +15,7 @@ dependencies total — `express` and `multer`.
 </details>
 
 ![Node](https://img.shields.io/badge/node-%E2%89%A522-black)
-![Dependencies](https://img.shields.io/badge/runtime%20deps-2-black)
+![Storage](https://img.shields.io/badge/storage-sqlite%20%2F%20turso-black)
 ![No build step](https://img.shields.io/badge/build%20step-none-black)
 ![License](https://img.shields.io/badge/license-MIT-black)
 
@@ -31,7 +31,8 @@ list view, form, save and delete all come for free.
 
 ```bash
 npm install
-ADMIN_PASSWORD='pick-something-long' npm start
+cp .env.example .env      # then set ADMIN_PASSWORD in it
+npm start
 ```
 
 - Site: http://localhost:3000
@@ -41,6 +42,9 @@ ADMIN_PASSWORD='pick-something-long' npm start
 |------------------|--------------------|----------------------------------------------------|
 | `ADMIN_PASSWORD` | `admin`            | **Set this.** It's the only login.                  |
 | `SESSION_SECRET` | random each boot   | Set it in production or logins drop on restart.     |
+| `TURSO_DATABASE_URL` | unset          | Set it and the DB moves to Turso. Unset = local file. |
+| `TURSO_AUTH_TOKEN` | unset            | Paired with the above.                              |
+| `BLOB_READ_WRITE_TOKEN` | unset       | Set it and uploads go to Vercel Blob instead of disk. |
 | `PORT`           | `3000`             |                                                     |
 | `SITE_URL`       | `http://localhost` | Absolute origin. Used by the sitemap and link previews. |
 | `DATA_DIR`       | project folder     | Where `portfolio.db` and `uploads/` live. Set to the volume mount in production. |
@@ -68,6 +72,7 @@ lib.js           escape / markdown / slugify
 views/site.js    public pages
 views/admin.js   admin pages
 public/*.css     two stylesheets
+push-content.js  one-shot copy of local content into Turso
 portfolio.db     created on first run (gitignored)
 uploads/         uploaded images (gitignored)
 Dockerfile       production image
@@ -79,34 +84,57 @@ Adding a new editable section = one entry in `ENTITIES` in `server.js` plus a
 
 ## Deploying
 
-Needs Node 22+ and **a persistent disk**. Vercel and other ephemeral-filesystem
-hosts will not work as-is — `portfolio.db` and `uploads/` would be wiped on every
-deploy. Fly.io, Railway, or a VPS are fine.
+Storage is switched by environment variable, so the same code runs both ways:
 
-`Dockerfile` and `fly.toml` are included. For Fly:
+| | Database | Uploads |
+|---|---|---|
+| **Local** (no env vars) | `portfolio.db` via a libSQL `file:` URL | `uploads/` on disk |
+| **Production** | Turso (`TURSO_DATABASE_URL`) | Vercel Blob (`BLOB_READ_WRITE_TOKEN`) |
+
+libSQL *is* SQLite, so the schema and every query are identical in both — only the
+driver and the connection string change.
+
+### Vercel + Turso
 
 ```bash
-fly launch --no-deploy          # then set the app name in fly.toml
+# 1. database
+turso db create portfolio
+turso db show portfolio --url          # -> TURSO_DATABASE_URL
+turso db tokens create portfolio       # -> TURSO_AUTH_TOKEN
+
+# 2. set them on the project (plus a password and secret)
+vercel env add TURSO_DATABASE_URL production
+vercel env add TURSO_AUTH_TOKEN production
+vercel env add ADMIN_PASSWORD production
+vercel env add SESSION_SECRET production      # openssl rand -hex 32
+vercel env add SITE_URL production            # https://your-domain
+
+# 3. create a Blob store in the Vercel dashboard (Storage -> Blob).
+#    BLOB_READ_WRITE_TOKEN is injected automatically once it's linked.
+
+# 4. push your local content up, then deploy
+TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... node push-content.js
+vercel --prod
+```
+
+`SESSION_SECRET` must be set in production — without it a new random secret is
+generated per cold start and every admin login is immediately invalidated.
+
+### Anywhere with a disk (Fly.io, Railway, a VPS)
+
+`Dockerfile` and `fly.toml` are included and need no Turso or Blob at all — set
+`DATA_DIR` to a mounted volume and it uses plain SQLite plus local uploads:
+
+```bash
+fly launch --no-deploy
 fly volumes create data --size 1
 fly secrets set ADMIN_PASSWORD='...' SESSION_SECRET="$(openssl rand -hex 32)"
-# point SITE_URL in fly.toml at your real domain first
 fly deploy
 ```
 
-The `Secure` cookie flag is added automatically when the request arrives over
-HTTPS (`app.set('trust proxy', 1)` makes `req.secure` and the contact-form rate
-limiter read the real client IP behind Fly/Cloudflare rather than the proxy's).
-
-**Moving your content up.** The database is gitignored, so a fresh deploy starts
-from the placeholder seed. Copy your local content over once:
-
-```bash
-node -e "new (require('node:sqlite').DatabaseSync)('portfolio.db').exec('pragma wal_checkpoint(TRUNCATE)')"
-fly sftp shell -C 'put portfolio.db /data/portfolio.db'
-```
-
-The checkpoint matters — without it most of your data is still sitting in
-`portfolio.db-wal` and you'd copy up a nearly empty file.
+The `Secure` cookie flag is added automatically when the request arrives over HTTPS
+(`app.set('trust proxy', 1)` also makes the contact-form rate limiter read the real
+client IP rather than the proxy's).
 
 Back up `portfolio.db` and `uploads/` together; they're the whole site.
 

@@ -3,4 +3,5 @@ node_modules
 portfolio.db*
 uploads
 docs
+.env
 *.md

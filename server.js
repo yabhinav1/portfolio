@@ -4,7 +4,8 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { DatabaseSync } from 'node:sqlite'
+import { createClient } from '@libsql/client'
+import { put } from '@vercel/blob'
 import { slugify } from './lib.js'
 import { homePage, projectPage, notFound } from './views/site.js'
 import { adminList, adminForm, adminSettings, adminInbox, loginPage } from './views/admin.js'
@@ -14,15 +15,25 @@ const PORT = process.env.PORT || 3000
 const PASSWORD = process.env.ADMIN_PASSWORD || 'admin'
 const SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex')
 const SITE = (process.env.SITE_URL || `http://localhost:${PORT}`).replace(/\/$/, '')
-// DB + uploads are the whole site; on Fly they live on the mounted volume, not in the image.
 const DATA = process.env.DATA_DIR || root
-fs.mkdirSync(path.join(DATA, 'uploads'), { recursive: true })
+const TURSO = !!process.env.TURSO_DATABASE_URL
+const BLOB = !!process.env.BLOB_READ_WRITE_TOKEN
+// Serverless filesystems are read-only, so only touch disk when we're actually using it.
+if (!BLOB) fs.mkdirSync(path.join(DATA, 'uploads'), { recursive: true })
 if (!process.env.ADMIN_PASSWORD) console.warn('⚠  ADMIN_PASSWORD not set — using "admin". Set it before deploying.')
 
 /* ---------- db ---------- */
-const db = new DatabaseSync(path.join(DATA, 'portfolio.db'))
-db.exec(`
-  pragma journal_mode = WAL;
+// libSQL *is* SQLite, so schema and queries are unchanged — only the driver and the
+// sync/async boundary differ. file: locally, Turso in production.
+const client = createClient(TURSO
+  ? { url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN }
+  : { url: `file:${path.join(DATA, 'portfolio.db')}` })
+
+const all = (sql, ...args) => client.execute({ sql, args }).then(r => r.rows)
+const get = (sql, ...args) => all(sql, ...args).then(r => r[0])
+const run = (sql, ...args) => client.execute({ sql, args })
+
+const SCHEMA = `
   create table if not exists settings (key text primary key, value text not null default '');
   create table if not exists projects (
     id integer primary key, title text not null default '', slug text unique,
@@ -37,7 +48,7 @@ db.exec(`
   create table if not exists messages (
     id integer primary key, name text default '', email text default '', body text default '',
     created text default '', seen integer default 0);
-`)
+`
 
 const DEFAULTS = {
   name: 'Your Name', role: 'Full-stack developer', location: 'Bengaluru, India',
@@ -47,11 +58,11 @@ const DEFAULTS = {
   github: '', linkedin: '', twitter: '', source: '', accent: '#b0451f',
   seo_title: '', seo_description: '', og_image: '',
 }
-const getSettings = () => {
-  const rows = db.prepare('select key, value from settings').all()
+const getSettings = async () => {
+  const rows = await all('select key, value from settings')
   return { ...DEFAULTS, ...Object.fromEntries(rows.map(r => [r.key, r.value])), site: SITE }
 }
-const setSetting = db.prepare('insert into settings(key,value) values(?,?) on conflict(key) do update set value=excluded.value')
+const setSetting = (k, v) => run('insert into settings(key,value) values(?,?) on conflict(key) do update set value=excluded.value', k, v)
 
 /* ---------- entity specs: one table-driven admin instead of three hand-written CRUDs ---------- */
 const ENTITIES = {
@@ -95,26 +106,32 @@ const ENTITIES = {
     ],
   },
 }
-const rowsOf = e => db.prepare(`select * from ${e} order by ${ENTITIES[e].order}`).all()
-const rowById = (e, id) => db.prepare(`select * from ${e} where id = ?`).get(id)
+const rowsOf = e => all(`select * from ${e} order by ${ENTITIES[e].order}`)
+const rowById = (e, id) => get(`select * from ${e} where id = ?`, id)
 
-/* ---------- seed once, so a fresh install isn't a blank page ---------- */
-if (!db.prepare('select count(*) c from projects').get().c) {
-  const p = db.prepare(`insert into projects (title,slug,summary,description,tags,year,featured,published,position)
-    values (?,?,?,?,?,?,?,1,?)`)
-  p.run('Nimbus Analytics', 'nimbus-analytics', 'Realtime dashboard handling 400k events a day',
+/* ---------- schema + seed, once per cold start ---------- */
+const init = async () => {
+  if (!TURSO) await client.execute('pragma journal_mode = WAL')   // local file only
+  await client.executeMultiple(SCHEMA)
+  if ((await get('select count(*) c from projects')).c) return
+  const proj = `insert into projects (title,slug,summary,description,tags,year,featured,published,position)
+    values (?,?,?,?,?,?,?,1,?)`
+  await run(proj, 'Nimbus Analytics', 'nimbus-analytics', 'Realtime dashboard handling 400k events a day',
     'A short case study goes here.\n\nWhat the problem was, what you built, and what changed because of it.', 'Next.js, ClickHouse, D3', '2026', 1, 1)
-  p.run('Fold', 'fold', 'Offline-first notes app that syncs without conflicts',
+  await run(proj, 'Fold', 'fold', 'Offline-first notes app that syncs without conflicts',
     'Replace this with a real project from /admin.', 'React, CRDT, IndexedDB', '2025', 1, 2)
-  p.run('Payload', 'payload', 'Self-hosted deploy pipeline for small teams',
+  await run(proj, 'Payload', 'payload', 'Self-hosted deploy pipeline for small teams',
     'Replace this with a real project from /admin.', 'Go, Docker', '2025', 0, 3)
-  db.prepare('insert into experience (role,company,period,location,description,position) values (?,?,?,?,?,?)')
-    .run('Freelance developer', 'Self-employed', '2024 — Present', 'Remote', 'Shipping products for founders who would rather have a product than a roadmap.', 1)
-  const s = db.prepare('insert into skills (label,items,position) values (?,?,?)')
-  s.run('Frontend', 'React, Next.js, TypeScript, Tailwind', 1)
-  s.run('Backend', 'Node, Python, Postgres, Redis', 2)
-  s.run('Infra', 'AWS, Docker, CI/CD, Fly.io', 3)
+  await run('insert into experience (role,company,period,location,description,position) values (?,?,?,?,?,?)',
+    'Freelance developer', 'Self-employed', '2024 — Present', 'Remote',
+    'Shipping products for founders who would rather have a product than a roadmap.', 1)
+  for (const [l, i, n] of [['Frontend', 'React, Next.js, TypeScript, Tailwind', 1],
+                           ['Backend', 'Node, Python, Postgres, Redis', 2],
+                           ['Infra', 'AWS, Docker, CI/CD, Fly.io', 3]])
+    await run('insert into skills (label,items,position) values (?,?,?)', l, i, n)
 }
+let ready
+const boot = () => (ready ||= init())
 
 /* ---------- auth: signed cookie, no session store ---------- */
 const sign = v => `${v}.${crypto.createHmac('sha256', SECRET).update(v).digest('base64url')}`
@@ -134,10 +151,11 @@ const requireAuth = (req, res, next) => authed(req) ? next() : res.redirect('/ad
 
 /* ---------- uploads ---------- */
 const OK_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif', 'image/svg+xml'])
+const filename = f => `${Date.now()}-${slugify(path.parse(f.originalname).name) || 'file'}${path.extname(f.originalname).toLowerCase()}`
 const upload = multer({
-  storage: multer.diskStorage({
+  storage: BLOB ? multer.memoryStorage() : multer.diskStorage({
     destination: path.join(DATA, 'uploads'),
-    filename: (_r, file, cb) => cb(null, `${Date.now()}-${slugify(path.parse(file.originalname).name) || 'file'}${path.extname(file.originalname).toLowerCase()}`),
+    filename: (_r, file, cb) => cb(null, filename(file)),
   }),
   limits: { fileSize: 8 * 1024 * 1024 },
   fileFilter: (_r, file, cb) => cb(OK_TYPES.has(file.mimetype) ? null : new Error('Images only'), OK_TYPES.has(file.mimetype)),
@@ -146,33 +164,34 @@ const upload = multer({
 const app = express()
 app.set('trust proxy', 1)   // Fly/Cloudflare terminate TLS; without this req.ip is the proxy for everyone
 app.disable('x-powered-by')
+app.use(async (_req, _res, next) => { try { await boot() } catch (e) { return next(e) } next() })
 app.use(express.urlencoded({ extended: false, limit: '256kb' }))
 app.use('/public', express.static(path.join(root, 'public'), { maxAge: '1h' }))
-app.use('/uploads', express.static(path.join(DATA, 'uploads'), { maxAge: '7d' }))
+if (!BLOB) app.use('/uploads', express.static(path.join(DATA, 'uploads'), { maxAge: '7d' }))
 
 /* ---------- public site ---------- */
-app.get('/', (_req, res) => res.send(homePage({
-  s: getSettings(),
-  projects: db.prepare('select * from projects where published = 1 order by position asc, id desc').all(),
-  experience: rowsOf('experience'),
-  skills: rowsOf('skills'),
-  sent: 'sent' in _req.query,
+app.get('/', async (req, res) => res.send(homePage({
+  s: await getSettings(),
+  projects: await all('select * from projects where published = 1 order by position asc, id desc'),
+  experience: await rowsOf('experience'),
+  skills: await rowsOf('skills'),
+  sent: 'sent' in req.query,
 })))
 
-app.get('/work/:slug', (req, res) => {
-  const p = db.prepare('select * from projects where slug = ? and published = 1').get(req.params.slug)
-  const s = getSettings()
+app.get('/work/:slug', async (req, res) => {
+  const p = await get('select * from projects where slug = ? and published = 1', req.params.slug)
+  const s = await getSettings()
   if (!p) return res.status(404).send(notFound(s))
-  const all = db.prepare('select slug, title from projects where published = 1 order by position asc, id desc').all()
-  const i = all.findIndex(x => x.slug === p.slug)
-  res.send(projectPage({ s, p, next: all.length > 1 ? all[(i + 1) % all.length] : null }))
+  const list = await all('select slug, title from projects where published = 1 order by position asc, id desc')
+  const i = list.findIndex(x => x.slug === p.slug)
+  res.send(projectPage({ s, p, next: list.length > 1 ? list[(i + 1) % list.length] : null }))
 })
 
 app.get('/robots.txt', (_req, res) => res.type('text/plain')
   .send(`User-agent: *\nDisallow: /admin\nAllow: /\n\nSitemap: ${SITE}/sitemap.xml\n`))
 
-app.get('/sitemap.xml', (_req, res) => {
-  const slugs = db.prepare('select slug from projects where published = 1').all()
+app.get('/sitemap.xml', async (_req, res) => {
+  const slugs = await all('select slug from projects where published = 1')
   res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>${SITE}/</loc><priority>1.0</priority></url>
@@ -182,7 +201,7 @@ ${slugs.map(r => `  <url><loc>${SITE}/work/${r.slug}</loc><priority>0.8</priorit
 
 // ponytail: in-memory rate limit, resets on restart. Swap for a table if you ever get real spam.
 const hits = new Map()
-app.post('/contact', (req, res) => {
+app.post('/contact', async (req, res) => {
   const ip = req.ip
   const now = Date.now()
   const recent = (hits.get(ip) || []).filter(t => now - t < 3600e3)
@@ -194,7 +213,7 @@ app.post('/contact', (req, res) => {
   const body = String(req.body.body || '').trim().slice(0, 5000)
   if (req.body.website) return res.redirect('/?sent#contact')          // honeypot
   if (!body || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).send('Please give a valid email and a message.')
-  db.prepare('insert into messages (name,email,body,created) values (?,?,?,?)').run(name, email, body, new Date().toISOString())
+  await run('insert into messages (name,email,body,created) values (?,?,?,?)', name, email, body, new Date().toISOString())
   res.redirect('/?sent#contact')
 })
 
@@ -214,65 +233,71 @@ app.post('/admin/logout', (_req, res) => {
 
 app.use('/admin', requireAuth)
 
-const counts = () => ({
-  projects: db.prepare('select count(*) c from projects').get().c,
-  experience: db.prepare('select count(*) c from experience').get().c,
-  skills: db.prepare('select count(*) c from skills').get().c,
-  unread: db.prepare('select count(*) c from messages where seen = 0').get().c,
-})
+const counts = async () => {
+  const [p, e, k, u] = await Promise.all([
+    get('select count(*) c from projects'), get('select count(*) c from experience'),
+    get('select count(*) c from skills'), get('select count(*) c from messages where seen = 0'),
+  ])
+  return { projects: p.c, experience: e.c, skills: k.c, unread: u.c }
+}
 
 app.get('/admin', (_req, res) => res.redirect('/admin/projects'))
 
-app.post('/admin/upload', upload.single('file'), (req, res) =>
-  res.json({ url: req.file ? `/uploads/${req.file.filename}` : null }))
+app.post('/admin/upload', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.json({ url: null })
+  if (!BLOB) return res.json({ url: `/uploads/${req.file.filename}` })
+  const { url } = await put(filename(req.file), req.file.buffer,
+    { access: 'public', contentType: req.file.mimetype, addRandomSuffix: true })
+  res.json({ url })   // absolute Blob URL; abs() in views/site.js leaves it alone
+})
 
-app.get('/admin/settings', (req, res) =>
-  res.send(adminSettings({ s: getSettings(), counts: counts(), saved: 'saved' in req.query })))
+app.get('/admin/settings', async (req, res) =>
+  res.send(adminSettings({ s: await getSettings(), counts: await counts(), saved: 'saved' in req.query })))
 const BOOL_SETTINGS = new Set(['available'])
-app.post('/admin/settings', (req, res) => {
+app.post('/admin/settings', async (req, res) => {
   for (const k of Object.keys(DEFAULTS)) {
     // unchecked box is absent from the body, so bools must be written either way; a text
     // field that is absent means "not on this form" — writing '' would silently erase it.
-    if (BOOL_SETTINGS.has(k)) setSetting.run(k, req.body[k] ? '1' : '0')
-    else if (k in req.body) setSetting.run(k, String(req.body[k]).slice(0, 8000))
+    if (BOOL_SETTINGS.has(k)) await setSetting(k, req.body[k] ? '1' : '0')
+    else if (k in req.body) await setSetting(k, String(req.body[k]).slice(0, 8000))
   }
   res.redirect('/admin/settings?saved')
 })
 
-app.get('/admin/messages', (_req, res) =>
-  res.send(adminInbox({ messages: db.prepare('select * from messages order by id desc').all(), counts: counts() })))
-app.post('/admin/messages/:id/seen', (req, res) => {
-  db.prepare('update messages set seen = 1 - seen where id = ?').run(Number(req.params.id))
+app.get('/admin/messages', async (_req, res) =>
+  res.send(adminInbox({ messages: await all('select * from messages order by id desc'), counts: await counts() })))
+app.post('/admin/messages/:id/seen', async (req, res) => {
+  await run('update messages set seen = 1 - seen where id = ?', Number(req.params.id))
   res.redirect('/admin/messages')
 })
-app.post('/admin/messages/:id/delete', (req, res) => {
-  db.prepare('delete from messages where id = ?').run(Number(req.params.id))
+app.post('/admin/messages/:id/delete', async (req, res) => {
+  await run('delete from messages where id = ?', Number(req.params.id))
   res.redirect('/admin/messages')
 })
 
 app.param('entity', (req, res, next, e) => ENTITIES[e] ? next() : res.status(404).send('Unknown section'))
 
-app.get('/admin/:entity', (req, res) => res.send(adminList({
+app.get('/admin/:entity', async (req, res) => res.send(adminList({
   key: req.params.entity, spec: ENTITIES[req.params.entity],
-  rows: rowsOf(req.params.entity), counts: counts(),
+  rows: await rowsOf(req.params.entity), counts: await counts(),
 })))
 
-app.get('/admin/:entity/new', (req, res) => res.send(adminForm({
-  key: req.params.entity, spec: ENTITIES[req.params.entity], row: {}, counts: counts(),
+app.get('/admin/:entity/new', async (req, res) => res.send(adminForm({
+  key: req.params.entity, spec: ENTITIES[req.params.entity], row: {}, counts: await counts(),
 })))
 
-app.get('/admin/:entity/:id', (req, res) => {
-  const row = rowById(req.params.entity, Number(req.params.id))
+app.get('/admin/:entity/:id', async (req, res) => {
+  const row = await rowById(req.params.entity, Number(req.params.id))
   if (!row) return res.redirect(`/admin/${req.params.entity}`)
-  res.send(adminForm({ key: req.params.entity, spec: ENTITIES[req.params.entity], row, counts: counts() }))
+  res.send(adminForm({ key: req.params.entity, spec: ENTITIES[req.params.entity], row, counts: await counts() }))
 })
 
-app.post('/admin/:entity/:id/delete', (req, res) => {
-  db.prepare(`delete from ${req.params.entity} where id = ?`).run(Number(req.params.id))
+app.post('/admin/:entity/:id/delete', async (req, res) => {
+  await run(`delete from ${req.params.entity} where id = ?`, Number(req.params.id))
   res.redirect(`/admin/${req.params.entity}`)
 })
 
-app.post('/admin/:entity/:id?', (req, res) => {
+app.post('/admin/:entity/:id?', async (req, res) => {
   const key = req.params.entity
   const spec = ENTITIES[key]
   const data = {}
@@ -285,24 +310,28 @@ app.post('/admin/:entity/:id?', (req, res) => {
   if (key === 'projects') {
     data.slug = slugify(data.slug || data.title) || `project-${Date.now()}`
     let n = 1
-    while (db.prepare('select id from projects where slug = ? and id is not ?').get(data.slug, req.params.id ? Number(req.params.id) : null)) {
+    while (await get('select id from projects where slug = ? and id is not ?', data.slug, req.params.id ? Number(req.params.id) : null)) {
       data.slug = `${data.slug.replace(/-\d+$/, '')}-${++n}`
     }
   }
   const cols = Object.keys(data)
   const vals = cols.map(c => data[c])
   if (req.params.id) {
-    db.prepare(`update ${key} set ${cols.map(c => `${c} = ?`).join(', ')} where id = ?`).run(...vals, Number(req.params.id))
+    await run(`update ${key} set ${cols.map(c => `${c} = ?`).join(', ')} where id = ?`, ...vals, Number(req.params.id))
   } else {
-    db.prepare(`insert into ${key} (${cols.join(',')}) values (${cols.map(() => '?').join(',')})`).run(...vals)
+    await run(`insert into ${key} (${cols.join(',')}) values (${cols.map(() => '?').join(',')})`, ...vals)
   }
   res.redirect(`/admin/${key}`)
 })
 
-app.use((_req, res) => res.status(404).send(notFound(getSettings())))
+app.use(async (_req, res) => res.status(404).send(notFound(await getSettings())))
 app.use((err, _req, res, _next) => {
   console.error(err)
   res.status(400).send(`<p style="font:16px system-ui;padding:40px">${err.message}</p><p style="font:16px system-ui;padding:0 40px"><a href="javascript:history.back()">Go back</a></p>`)
 })
 
-app.listen(PORT, () => console.log(`\n  site   http://localhost:${PORT}\n  admin  http://localhost:${PORT}/admin\n`))
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => console.log(`\n  site   http://localhost:${PORT}\n  admin  http://localhost:${PORT}/admin\n`))
+}
+
+export default app

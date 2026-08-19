@@ -4,3 +4,4 @@ portfolio.db-shm
 portfolio.db-wal
 uploads/*
 !uploads/.gitkeep
+.env

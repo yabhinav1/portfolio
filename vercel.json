@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "server.js": { "includeFiles": "public/**" }
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/server.js" }
+  ]
+}
