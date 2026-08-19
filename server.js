@@ -84,6 +84,7 @@ const shape = (s) => {
   return {
     servers: n(s.stat_servers), users: n(s.stat_users), ping: s.stat_ping || '',
     users_k: Math.floor(Number(s.stat_users || 0) / 1000) + 'k',
+    raw_servers: Number(s.stat_servers || 0), raw_users: Number(s.stat_users || 0),
   }
 }
 
