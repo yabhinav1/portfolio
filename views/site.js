@@ -16,8 +16,30 @@ ${abs(s, image || s.og_image || s.avatar) ? `<meta property="og:image" content="
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/public/site.css">
+<script>document.documentElement.classList.add('js')</script>
 <style>:root{--accent:${esc(s.accent || '#b0451f')}}</style>
-</head><body class="${cls}"><a class="skip" href="#main">Skip to content</a>${body}</body></html>`
+</head><body class="${cls}"><a class="skip" href="#main">Skip to content</a>${body}
+<script>
+(() => {
+  const sel = '.intro > *, .rows .row, .split > div, .exp article, h2.big, .cwrap > *, .case > *'
+  const els = [...document.querySelectorAll(sel)]
+  if (!els.length || !('IntersectionObserver' in window)) return
+  const io = new IntersectionObserver((es) => es.forEach(e => {
+    if (!e.isIntersecting) return
+    e.target.classList.add('in')
+    io.unobserve(e.target)
+  }), { rootMargin: '0px 0px -8% 0px', threshold: 0.05 })
+  const n = new Map()
+  for (const el of els) {
+    const i = n.get(el.parentElement) || 0
+    n.set(el.parentElement, i + 1)
+    el.classList.add('reveal')
+    el.style.transitionDelay = Math.min(i * 60, 300) + 'ms'
+    io.observe(el)
+  }
+})()
+</script>
+</body></html>`
 
 const header = s => `
 <header class="bar">
