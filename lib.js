@@ -11,6 +11,10 @@ export const md = s => esc(s).split(/\n{2,}/).filter(Boolean).map(p =>
 export const slugify = s => String(s || '').toLowerCase().trim()
   .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60)
 
+// {{servers}} style placeholders, filled at render
+export const fill = (text, vars) => String(text ?? '').replace(/\{\{(\w+)\}\}/g,
+  (m, k) => (k in vars ? vars[k] : m))
+
 export const list = s => String(s || '').split(',').map(x => x.trim()).filter(Boolean)
 
 // shared with push-content.js

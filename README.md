@@ -139,6 +139,14 @@ client IP rather than the proxy's).
 
 Back up `portfolio.db` and `uploads/` together; they're the whole site.
 
+## Live stats
+
+Project text can embed `{{servers}}`, `{{users}}`, `{{users_k}}` and `{{ping}}`.
+They are filled at render from `annie.monster/api/status`, cached in the settings
+table and refreshed in the background once the stored copy is older than six
+hours, so no page load waits on the network. If the API is unreachable the last
+known values are used and the refresh backs off until the next window.
+
 ## Known limits
 
 - Contact-form rate limit is in-memory, so it resets on restart.
