@@ -16,6 +16,7 @@ const PASSWORD = process.env.ADMIN_PASSWORD || 'admin'
 const SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex')
 const SITE = (process.env.SITE_URL || `http://localhost:${PORT}`).replace(/\/$/, '')
 const DATA = process.env.DATA_DIR || root
+
 const TURSO = !!process.env.TURSO_DATABASE_URL
 // OIDC-linked Blob stores set BLOB_STORE_ID instead of a token
 const BLOB = !!(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID || process.env.VERCEL)
@@ -204,7 +205,7 @@ app.set('trust proxy', 1)   // real client IP + req.secure behind a proxy
 app.disable('x-powered-by')
 app.use(async (_req, _res, next) => { try { await boot() } catch (e) { return next(e) } next() })
 app.use(express.urlencoded({ extended: false, limit: '256kb' }))
-app.use('/public', express.static(path.join(root, 'public'), { maxAge: '1h' }))
+app.use('/public', express.static(path.join(root, 'public'), { maxAge: '365d', immutable: true }))
 if (!BLOB) app.use('/uploads', express.static(path.join(DATA, 'uploads'), { maxAge: '7d' }))
 
 /* ---------- public site ---------- */

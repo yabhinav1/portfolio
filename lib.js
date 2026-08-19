@@ -1,3 +1,16 @@
+import crypto from 'node:crypto'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+// Stylesheets are served immutable, so the URL must change when the file does.
+// Vercel normalises mtimes, which makes the default ETag unreliable.
+const pub = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public')
+const hash = f => { try {
+  return crypto.createHash('sha1').update(fs.readFileSync(path.join(pub, f))).digest('hex').slice(0, 8)
+} catch { return '0' } }
+export const V = { site: hash('site.css'), admin: hash('admin.css') }
+
 export const esc = s => String(s ?? '').replace(/[&<>"']/g,
   c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 

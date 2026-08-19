@@ -1,10 +1,10 @@
-import { esc } from '../lib.js'
+import { esc, V } from '../lib.js'
 
 const shell = ({ title, nav = '', body, counts }) => `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)} · Admin</title><meta name="robots" content="noindex">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>⚙</text></svg>">
-<link rel="stylesheet" href="/public/admin.css">
+<link rel="stylesheet" href="/public/admin.css?v=${V.admin}">
 </head><body>
 <aside class="side">
   <a class="logo" href="/admin/projects">Portfolio<span>admin</span></a>
@@ -177,7 +177,7 @@ ${messages.length ? `<div class="msgs">${messages.map(m => `
 export const loginPage = ({ error }) => `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Sign in · Admin</title><meta name="robots" content="noindex">
-<link rel="stylesheet" href="/public/admin.css"></head>
+<link rel="stylesheet" href="/public/admin.css?v=${V.admin}"></head>
 <body class="loginBody">
 <form method="post" action="/admin/login" class="login">
   <h1>Portfolio admin</h1>
