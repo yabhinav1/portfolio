@@ -2,6 +2,7 @@
 // Usage:  TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... node push-content.js
 import { createClient } from '@libsql/client'
 import path from 'node:path'
+import { SCHEMA } from './lib.js'
 import { fileURLToPath } from 'node:url'
 
 const root = path.dirname(fileURLToPath(import.meta.url))
@@ -10,6 +11,8 @@ if (!url) { console.error('Set TURSO_DATABASE_URL (and TURSO_AUTH_TOKEN).'); pro
 
 const local = createClient({ url: `file:${path.join(root, 'portfolio.db')}` })
 const remote = createClient({ url, authToken })
+
+await remote.executeMultiple(SCHEMA)   // no-op if the tables already exist
 
 const TABLES = ['settings', 'projects', 'experience', 'skills']   // messages stay local on purpose
 

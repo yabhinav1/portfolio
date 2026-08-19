@@ -44,7 +44,7 @@ npm start
 | `SESSION_SECRET` | random each boot   | Set it in production or logins drop on restart.     |
 | `TURSO_DATABASE_URL` | unset          | Set it and the DB moves to Turso. Unset = local file. |
 | `TURSO_AUTH_TOKEN` | unset            | Paired with the above.                              |
-| `BLOB_READ_WRITE_TOKEN` | unset       | Set it and uploads go to Vercel Blob instead of disk. |
+| `BLOB_READ_WRITE_TOKEN` | unset       | Uploads go to Vercel Blob. `BLOB_STORE_ID` (set by an OIDC-connected store) or `VERCEL` also trigger it. |
 | `PORT`           | `3000`             |                                                     |
 | `SITE_URL`       | `http://localhost` | Absolute origin. Used by the sitemap and link previews. |
 | `DATA_DIR`       | project folder     | Where `portfolio.db` and `uploads/` live. Set to the volume mount in production. |
@@ -109,8 +109,9 @@ vercel env add ADMIN_PASSWORD production
 vercel env add SESSION_SECRET production      # openssl rand -hex 32
 vercel env add SITE_URL production            # https://your-domain
 
-# 3. create a Blob store in the Vercel dashboard (Storage -> Blob).
-#    BLOB_READ_WRITE_TOKEN is injected automatically once it's linked.
+# 3. create a Blob store in the Vercel dashboard (Storage -> Blob) and connect it.
+#    Nothing to copy: a token-based link sets BLOB_READ_WRITE_TOKEN, an OIDC link
+#    sets BLOB_STORE_ID. Either one switches uploads over to Blob.
 
 # 4. push your local content up, then deploy
 TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... node push-content.js

@@ -6,7 +6,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createClient } from '@libsql/client'
 import { put } from '@vercel/blob'
-import { slugify } from './lib.js'
+import { slugify, SCHEMA } from './lib.js'
 import { homePage, projectPage, notFound } from './views/site.js'
 import { adminList, adminForm, adminSettings, adminInbox, loginPage } from './views/admin.js'
 
@@ -17,7 +17,9 @@ const SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('he
 const SITE = (process.env.SITE_URL || `http://localhost:${PORT}`).replace(/\/$/, '')
 const DATA = process.env.DATA_DIR || root
 const TURSO = !!process.env.TURSO_DATABASE_URL
-const BLOB = !!process.env.BLOB_READ_WRITE_TOKEN
+// A Blob store connected over OIDC sets BLOB_STORE_ID but no read-write token, so
+// checking only for the token would fall back to disk — which is read-only on Vercel.
+const BLOB = !!(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID || process.env.VERCEL)
 // Serverless filesystems are read-only, so only touch disk when we're actually using it.
 if (!BLOB) fs.mkdirSync(path.join(DATA, 'uploads'), { recursive: true })
 if (!process.env.ADMIN_PASSWORD) console.warn('⚠  ADMIN_PASSWORD not set — using "admin". Set it before deploying.')
@@ -32,23 +34,6 @@ const client = createClient(TURSO
 const all = (sql, ...args) => client.execute({ sql, args }).then(r => r.rows)
 const get = (sql, ...args) => all(sql, ...args).then(r => r[0])
 const run = (sql, ...args) => client.execute({ sql, args })
-
-const SCHEMA = `
-  create table if not exists settings (key text primary key, value text not null default '');
-  create table if not exists projects (
-    id integer primary key, title text not null default '', slug text unique,
-    summary text default '', description text default '', image text default '',
-    tags text default '', link text default '', repo text default '', year text default '',
-    featured integer default 0, published integer default 1, position integer default 0);
-  create table if not exists experience (
-    id integer primary key, role text default '', company text default '', period text default '',
-    location text default '', description text default '', position integer default 0);
-  create table if not exists skills (
-    id integer primary key, label text default '', items text default '', position integer default 0);
-  create table if not exists messages (
-    id integer primary key, name text default '', email text default '', body text default '',
-    created text default '', seen integer default 0);
-`
 
 const DEFAULTS = {
   name: 'Your Name', role: 'Full-stack developer', location: 'Bengaluru, India',
