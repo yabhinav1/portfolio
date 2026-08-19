@@ -20,7 +20,7 @@ const TURSO = !!process.env.TURSO_DATABASE_URL
 // OIDC-linked Blob stores set BLOB_STORE_ID instead of a token
 const BLOB = !!(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID || process.env.VERCEL)
 if (!BLOB) fs.mkdirSync(path.join(DATA, 'uploads'), { recursive: true })
-if (!process.env.ADMIN_PASSWORD) console.warn('⚠  ADMIN_PASSWORD not set — using "admin". Set it before deploying.')
+if (!process.env.ADMIN_PASSWORD) console.warn('⚠  ADMIN_PASSWORD not set, using "admin". Set it before deploying.')
 
 /* ---------- db ---------- */
 if (process.env.VERCEL && !TURSO) {
@@ -38,7 +38,7 @@ const run = (sql, ...args) => client.execute({ sql, args })
 
 const DEFAULTS = {
   name: 'Your Name', role: 'Full-stack developer', location: 'Bengaluru, India',
-  tagline: 'I build web products end to end — from the first sketch to the deploy.',
+  tagline: 'I build web products end to end, from the first sketch to the deploy.',
   about: 'Replace this in /admin → Settings.\n\nWrite two short paragraphs about how you work and what you care about. Specific beats impressive.',
   email: 'you@example.com', avatar: '', resume: '', available: '1',
   github: '', linkedin: '', twitter: '', source: '', accent: '#b0451f',
@@ -105,7 +105,7 @@ const ENTITIES = {
       { n: 'summary', l: 'One-line summary', t: 'text', hint: 'Shown in the work list. Lead with the outcome, not the stack.' },
       { n: 'description', l: 'Full description', t: 'textarea', rows: 8, hint: 'Blank line = new paragraph. **bold** and [text](url) work.' },
       { n: 'image', l: 'Cover image', t: 'image' },
-      { n: 'tags', l: 'Tags', t: 'text', hint: 'Comma separated — React, Postgres, Figma' },
+      { n: 'tags', l: 'Tags', t: 'text', hint: 'Comma separated: React, Postgres, Figma' },
       { n: 'link', l: 'Live URL', t: 'text' },
       { n: 'repo', l: 'Repo URL', t: 'text' },
       { n: 'year', l: 'Year', t: 'text' },
@@ -121,7 +121,7 @@ const ENTITIES = {
     fields: [
       { n: 'role', l: 'Role', t: 'text', req: true },
       { n: 'company', l: 'Company', t: 'text' },
-      { n: 'period', l: 'Period', t: 'text', hint: '2023 — Present' },
+      { n: 'period', l: 'Period', t: 'text', hint: '2023 to present' },
       { n: 'location', l: 'Location', t: 'text' },
       { n: 'description', l: 'What you did', t: 'textarea', rows: 5 },
       { n: 'position', l: 'Sort order', t: 'number' },
@@ -154,7 +154,7 @@ const init = async () => {
   await run(proj, 'Payload', 'payload', 'Self-hosted deploy pipeline for small teams',
     'Replace this with a real project from /admin.', 'Go, Docker', '2025', 0, 3)
   await run('insert into experience (role,company,period,location,description,position) values (?,?,?,?,?,?)',
-    'Freelance developer', 'Self-employed', '2024 — Present', 'Remote',
+    'Freelance developer', 'Self-employed', '2024 to present', 'Remote',
     'Shipping products for founders who would rather have a product than a roadmap.', 1)
   for (const [l, i, n] of [['Frontend', 'React, Next.js, TypeScript, Tailwind', 1],
                            ['Backend', 'Node, Python, Postgres, Redis', 2],
@@ -239,7 +239,7 @@ app.post('/contact', async (req, res) => {
   const ip = req.ip
   const now = Date.now()
   const recent = (hits.get(ip) || []).filter(t => now - t < 3600e3)
-  if (recent.length >= 5) return res.status(429).send('Too many messages — try again later.')
+  if (recent.length >= 5) return res.status(429).send('Too many messages. Try again later.')
   hits.set(ip, [...recent, now])
 
   const name = String(req.body.name || '').trim().slice(0, 120)
