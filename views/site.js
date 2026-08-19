@@ -5,7 +5,7 @@ const abs = (s, u) => !u ? '' : /^https?:/.test(u) ? u : `${s.site}${u}`
 const layout = ({ s, title, body, cls = '', image = '' }) => `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(title || s.seo_title || `${s.name} — ${s.role}`)}</title>
+<title>${esc(title || s.seo_title || `${s.name}, ${s.role}`)}</title>
 <meta name="description" content="${esc(s.seo_description || s.tagline)}">
 <meta property="og:title" content="${esc(title || s.name)}">
 <meta property="og:description" content="${esc(s.seo_description || s.tagline)}">
@@ -129,7 +129,7 @@ ${experience.length ? `<section class="block">
   <h2 class="big">Let's build<br><span class="qi">something.</span></h2>
   <div class="cwrap">
     <p class="lede">Tell me what you're working on. I read every message and reply within a day or two.</p>
-    ${sent ? '<p class="ok" role="status">Thanks — your message landed. I\'ll get back to you soon.</p>' : ''}
+    ${sent ? '<p class="ok" role="status">Thanks, your message landed. I\'ll get back to you soon.</p>' : ''}
     <form method="post" action="/contact" class="cform">
       <label>Name<input name="name" autocomplete="name" maxlength="120"></label>
       <label>Email<input name="email" type="email" required autocomplete="email" maxlength="200"></label>
@@ -145,7 +145,7 @@ ${experience.length ? `<section class="block">
 })
 
 export const projectPage = ({ s, p, next, stats = {} }) => layout({
-  s, title: `${p.title} — ${s.name}`, cls: 'sub', image: p.image,
+  s, title: `${p.title}, ${s.name}`, cls: 'sub', image: p.image,
   body: `${header(s)}
 <main id="main">
 <article class="case">
@@ -160,7 +160,7 @@ export const projectPage = ({ s, p, next, stats = {} }) => layout({
   </div>
   ${p.image ? `<img class="hero" src="${esc(p.image)}" alt="${esc(p.title)}">` : ''}
   <div class="prose wide">${md(fill(p.description, stats))}</div>
-  <p class="next">${next ? `<a href="/work/${esc(next.slug)}">Next — ${esc(next.title)} →</a>` : ''}
+  <p class="next">${next ? `<a href="/work/${esc(next.slug)}">Next: ${esc(next.title)} →</a>` : ''}
     <a href="/#contact">Want something like this? Get in touch →</a></p>
 </article>
 </main>${footer(s)}`,
