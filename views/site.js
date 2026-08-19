@@ -34,9 +34,13 @@ ${abs(s, image || s.og_image || s.avatar) ? `<meta property="og:image" content="
     const i = n.get(el.parentElement) || 0
     n.set(el.parentElement, i + 1)
     el.classList.add('reveal')
-    el.style.transitionDelay = Math.min(i * 60, 300) + 'ms'
-    io.observe(el)
+    el.style.transitionDelay = Math.min(i * 70, 350) + 'ms'
   }
+  // Let the hidden state paint before observing, or elements already on screen get
+  // .reveal and .in in one style recalculation and jump straight to visible.
+  requestAnimationFrame(() => requestAnimationFrame(() => els.forEach(el => io.observe(el))))
+  // If the observer never fires for some reason, don't leave the page blank.
+  setTimeout(() => els.forEach(el => el.classList.add('in')), 3000)
 })()
 </script>
 </body></html>`
