@@ -19,6 +19,8 @@ ADMIN_PASSWORD='pick-something-long' npm start
 | `ADMIN_PASSWORD` | `admin`            | **Set this.** It's the only login.                  |
 | `SESSION_SECRET` | random each boot   | Set it in production or logins drop on restart.     |
 | `PORT`           | `3000`             |                                                     |
+| `SITE_URL`       | `http://localhost` | Absolute origin. Used by the sitemap and link previews. |
+| `DATA_DIR`       | project folder     | Where `portfolio.db` and `uploads/` live. Set to the volume mount in production. |
 
 ## What the admin does
 
@@ -28,7 +30,7 @@ ADMIN_PASSWORD='pick-something-long' npm start
 - **Experience** and **Skills** — same CRUD, driven by one shared form renderer.
 - **Inbox** — contact-form submissions, mark read / delete.
 - **Settings** — name, role, tagline, about, photo, social links, résumé URL,
-  accent colour, availability badge, SEO title/description.
+  accent colour, availability badge, SEO title/description, link-preview image.
 - **Image upload** — drops files in `uploads/`, served from `/uploads`. Images
   only, 8 MB cap. You can also paste any external URL instead.
 
@@ -43,8 +45,10 @@ lib.js           escape / markdown / slugify
 views/site.js    public pages
 views/admin.js   admin pages
 public/*.css     two stylesheets
-portfolio.db     created on first run (gitignore it)
-uploads/         uploaded images (gitignore it)
+portfolio.db     created on first run (gitignored)
+uploads/         uploaded images (gitignored)
+Dockerfile       production image
+fly.toml         Fly.io config, volume mounted at /data
 ```
 
 Adding a new editable section = one entry in `ENTITIES` in `server.js` plus a
@@ -52,10 +56,36 @@ Adding a new editable section = one entry in `ENTITIES` in `server.js` plus a
 
 ## Deploying
 
-Any host that runs Node 22+ and gives you a persistent disk (Fly.io, Railway,
-a VPS). Put it behind HTTPS — the session cookie is `HttpOnly; SameSite=Lax`
-but not `Secure`, so add `Secure` once you're on TLS. Back up `portfolio.db`
-and `uploads/` together; they're the whole site.
+Needs Node 22+ and **a persistent disk**. Vercel and other ephemeral-filesystem
+hosts will not work as-is — `portfolio.db` and `uploads/` would be wiped on every
+deploy. Fly.io, Railway, or a VPS are fine.
+
+`Dockerfile` and `fly.toml` are included. For Fly:
+
+```bash
+fly launch --no-deploy          # then set the app name in fly.toml
+fly volumes create data --size 1
+fly secrets set ADMIN_PASSWORD='...' SESSION_SECRET="$(openssl rand -hex 32)"
+# point SITE_URL in fly.toml at your real domain first
+fly deploy
+```
+
+The `Secure` cookie flag is added automatically when the request arrives over
+HTTPS (`app.set('trust proxy', 1)` makes `req.secure` and the contact-form rate
+limiter read the real client IP behind Fly/Cloudflare rather than the proxy's).
+
+**Moving your content up.** The database is gitignored, so a fresh deploy starts
+from the placeholder seed. Copy your local content over once:
+
+```bash
+node -e "new (require('node:sqlite').DatabaseSync)('portfolio.db').exec('pragma wal_checkpoint(TRUNCATE)')"
+fly sftp shell -C 'put portfolio.db /data/portfolio.db'
+```
+
+The checkpoint matters — without it most of your data is still sitting in
+`portfolio.db-wal` and you'd copy up a nearly empty file.
+
+Back up `portfolio.db` and `uploads/` together; they're the whole site.
 
 ## Known ceilings
 
