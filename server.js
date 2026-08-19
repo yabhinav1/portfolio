@@ -17,16 +17,17 @@ const SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('he
 const SITE = (process.env.SITE_URL || `http://localhost:${PORT}`).replace(/\/$/, '')
 const DATA = process.env.DATA_DIR || root
 const TURSO = !!process.env.TURSO_DATABASE_URL
-// A Blob store connected over OIDC sets BLOB_STORE_ID but no read-write token, so
-// checking only for the token would fall back to disk — which is read-only on Vercel.
+// OIDC-linked Blob stores set BLOB_STORE_ID instead of a token
 const BLOB = !!(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID || process.env.VERCEL)
-// Serverless filesystems are read-only, so only touch disk when we're actually using it.
 if (!BLOB) fs.mkdirSync(path.join(DATA, 'uploads'), { recursive: true })
 if (!process.env.ADMIN_PASSWORD) console.warn('⚠  ADMIN_PASSWORD not set — using "admin". Set it before deploying.')
 
 /* ---------- db ---------- */
-// libSQL *is* SQLite, so schema and queries are unchanged — only the driver and the
-// sync/async boundary differ. file: locally, Turso in production.
+if (process.env.VERCEL && !TURSO) {
+  throw new Error('TURSO_DATABASE_URL is not set. Serverless has no writable disk, so the local SQLite file cannot be used. Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in the project environment variables.')
+}
+
+// file: locally, Turso in production
 const client = createClient(TURSO
   ? { url: process.env.TURSO_DATABASE_URL, authToken: process.env.TURSO_AUTH_TOKEN }
   : { url: `file:${path.join(DATA, 'portfolio.db')}` })
@@ -49,7 +50,7 @@ const getSettings = async () => {
 }
 const setSetting = (k, v) => run('insert into settings(key,value) values(?,?) on conflict(key) do update set value=excluded.value', k, v)
 
-/* ---------- entity specs: one table-driven admin instead of three hand-written CRUDs ---------- */
+/* ---------- entities: one spec drives list, form, save, delete ---------- */
 const ENTITIES = {
   projects: {
     label: 'Projects', singular: 'Project', order: 'position asc, id desc',
@@ -94,7 +95,7 @@ const ENTITIES = {
 const rowsOf = e => all(`select * from ${e} order by ${ENTITIES[e].order}`)
 const rowById = (e, id) => get(`select * from ${e} where id = ?`, id)
 
-/* ---------- schema + seed, once per cold start ---------- */
+/* ---------- schema + seed ---------- */
 const init = async () => {
   if (!TURSO) await client.execute('pragma journal_mode = WAL')   // local file only
   await client.executeMultiple(SCHEMA)
@@ -147,7 +148,7 @@ const upload = multer({
 })
 
 const app = express()
-app.set('trust proxy', 1)   // Fly/Cloudflare terminate TLS; without this req.ip is the proxy for everyone
+app.set('trust proxy', 1)   // real client IP + req.secure behind a proxy
 app.disable('x-powered-by')
 app.use(async (_req, _res, next) => { try { await boot() } catch (e) { return next(e) } next() })
 app.use(express.urlencoded({ extended: false, limit: '256kb' }))
@@ -184,7 +185,7 @@ ${slugs.map(r => `  <url><loc>${SITE}/work/${r.slug}</loc><priority>0.8</priorit
 </urlset>`)
 })
 
-// ponytail: in-memory rate limit, resets on restart. Swap for a table if you ever get real spam.
+// in-memory, resets on restart
 const hits = new Map()
 app.post('/contact', async (req, res) => {
   const ip = req.ip
@@ -233,7 +234,7 @@ app.post('/admin/upload', upload.single('file'), async (req, res) => {
   if (!BLOB) return res.json({ url: `/uploads/${req.file.filename}` })
   const { url } = await put(filename(req.file), req.file.buffer,
     { access: 'public', contentType: req.file.mimetype, addRandomSuffix: true })
-  res.json({ url })   // absolute Blob URL; abs() in views/site.js leaves it alone
+  res.json({ url })
 })
 
 app.get('/admin/settings', async (req, res) =>
@@ -241,8 +242,7 @@ app.get('/admin/settings', async (req, res) =>
 const BOOL_SETTINGS = new Set(['available'])
 app.post('/admin/settings', async (req, res) => {
   for (const k of Object.keys(DEFAULTS)) {
-    // unchecked box is absent from the body, so bools must be written either way; a text
-    // field that is absent means "not on this form" — writing '' would silently erase it.
+    // absent checkbox means off; an absent text field means it wasn't on this form
     if (BOOL_SETTINGS.has(k)) await setSetting(k, req.body[k] ? '1' : '0')
     else if (k in req.body) await setSetting(k, String(req.body[k]).slice(0, 8000))
   }

@@ -1,5 +1,5 @@
-// One-shot: copy everything from the local portfolio.db into the Turso database.
-// Usage:  TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... node push-content.js
+// Copy local portfolio.db into Turso.
+// TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=... node push-content.js
 import { createClient } from '@libsql/client'
 import path from 'node:path'
 import { SCHEMA } from './lib.js'
@@ -12,9 +12,9 @@ if (!url) { console.error('Set TURSO_DATABASE_URL (and TURSO_AUTH_TOKEN).'); pro
 const local = createClient({ url: `file:${path.join(root, 'portfolio.db')}` })
 const remote = createClient({ url, authToken })
 
-await remote.executeMultiple(SCHEMA)   // no-op if the tables already exist
+await remote.executeMultiple(SCHEMA)
 
-const TABLES = ['settings', 'projects', 'experience', 'skills']   // messages stay local on purpose
+const TABLES = ['settings', 'projects', 'experience', 'skills']   // messages aren't copied
 
 for (const t of TABLES) {
   const { rows } = await local.execute(`select * from ${t}`)

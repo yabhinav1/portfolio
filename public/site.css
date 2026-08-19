@@ -74,8 +74,7 @@ h1{font:700 clamp(44px,8.2vw,86px)/1.02 var(--sans);letter-spacing:-.045em}
 .row:hover .tags i{border-color:color-mix(in srgb,var(--bg) 45%,transparent);color:var(--bg)}
 .row-m{display:flex;align-items:center;gap:20px}
 .row-m img{width:132px;height:82px;object-fit:cover;border:1px solid var(--line);transition:filter .2s}
-/* Greyscale is a hover *affordance*, so it must not apply where there is no hover —
-   on touch the covers would just stay grey forever. */
+/* touch devices have no hover, so covers would stay grey */
 @media (hover:hover){
   .row-m img{filter:grayscale(1)}
   .row:hover .row-m img{filter:none}

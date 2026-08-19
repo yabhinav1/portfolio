@@ -139,11 +139,8 @@ client IP rather than the proxy's).
 
 Back up `portfolio.db` and `uploads/` together; they're the whole site.
 
-## Known ceilings
+## Known limits
 
-Marked in the code with `ponytail:` comments.
-
-- Contact-form rate limit is in-memory — resets on restart. Fine for one box.
-- Markdown is 4 rules, not CommonMark. Swap in `marked` if you outgrow it.
-- Single admin user, password in an env var. Add a users table if you ever
-  need more than one person editing.
+- Contact-form rate limit is in-memory, so it resets on restart.
+- Markdown covers paragraphs, bold, links and line breaks, not CommonMark.
+- One admin user, password in an env var.

@@ -1,7 +1,7 @@
 export const esc = s => String(s ?? '').replace(/[&<>"']/g,
   c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 
-// ponytail: 4-rule markdown (paragraphs, bold, links, breaks). Swap in `marked` if posts need more.
+// paragraphs, bold, links, line breaks
 export const md = s => esc(s).split(/\n{2,}/).filter(Boolean).map(p =>
   `<p>${p.replace(/\n/g, '<br>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
@@ -13,7 +13,7 @@ export const slugify = s => String(s || '').toLowerCase().trim()
 
 export const list = s => String(s || '').split(',').map(x => x.trim()).filter(Boolean)
 
-// Shared so push-content.js can create the tables before copying into them.
+// shared with push-content.js
 export const SCHEMA = `
   create table if not exists settings (key text primary key, value text not null default '');
   create table if not exists projects (
