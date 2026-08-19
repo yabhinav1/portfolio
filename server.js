@@ -44,7 +44,7 @@ const DEFAULTS = {
   tagline: 'I build web products end to end — from the first sketch to the deploy.',
   about: 'Replace this in /admin → Settings.\n\nWrite two short paragraphs about how you work and what you care about. Specific beats impressive.',
   email: 'you@example.com', avatar: '', resume: '', available: '1',
-  github: '', linkedin: '', twitter: '', accent: '#b0451f',
+  github: '', linkedin: '', twitter: '', source: '', accent: '#b0451f',
   seo_title: '', seo_description: '', og_image: '',
 }
 const getSettings = () => {
@@ -163,7 +163,9 @@ app.get('/work/:slug', (req, res) => {
   const p = db.prepare('select * from projects where slug = ? and published = 1').get(req.params.slug)
   const s = getSettings()
   if (!p) return res.status(404).send(notFound(s))
-  res.send(projectPage({ s, p }))
+  const all = db.prepare('select slug, title from projects where published = 1 order by position asc, id desc').all()
+  const i = all.findIndex(x => x.slug === p.slug)
+  res.send(projectPage({ s, p, next: all.length > 1 ? all[(i + 1) % all.length] : null }))
 })
 
 app.get('/robots.txt', (_req, res) => res.type('text/plain')

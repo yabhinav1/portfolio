@@ -20,6 +20,9 @@ a{color:inherit;text-decoration:none}
 ::selection{background:var(--ink);color:var(--bg)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 main{max-width:var(--w);margin:0 auto;padding:0 var(--gut)}
+.skip{position:absolute;left:-9999px;top:0;z-index:20;background:var(--ink);color:var(--bg);
+  padding:11px 15px;font:500 12px/1 var(--mono)}
+.skip:focus{left:8px;top:8px}
 
 /* ---- header ---- */
 .bar{max-width:var(--w);margin:0 auto;padding:22px var(--gut);
@@ -68,10 +71,15 @@ h1{font:700 clamp(44px,8.2vw,86px)/1.02 var(--sans);letter-spacing:-.045em}
 .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:13px}
 .tags i{font:500 10.5px/1 var(--mono);font-style:normal;text-transform:uppercase;
   letter-spacing:.06em;border:1px solid var(--line);padding:5px 7px;color:var(--mut)}
-.row:hover .tags i{border-color:rgba(255,255,255,.28);color:var(--bg)}
+.row:hover .tags i{border-color:color-mix(in srgb,var(--bg) 45%,transparent);color:var(--bg)}
 .row-m{display:flex;align-items:center;gap:20px}
-.row-m img{width:132px;height:82px;object-fit:cover;border:1px solid var(--line);filter:grayscale(1);transition:filter .2s}
-.row:hover .row-m img{filter:none}
+.row-m img{width:132px;height:82px;object-fit:cover;border:1px solid var(--line);transition:filter .2s}
+/* Greyscale is a hover *affordance*, so it must not apply where there is no hover —
+   on touch the covers would just stay grey forever. */
+@media (hover:hover){
+  .row-m img{filter:grayscale(1)}
+  .row:hover .row-m img{filter:none}
+}
 .row-m .ph{width:132px;height:82px;border:1px solid var(--line);display:block}
 .yr{font:500 12px/1 var(--mono);color:var(--mut)}
 .row:hover .yr{color:var(--bg);opacity:.7}
@@ -166,5 +174,9 @@ img.hero{border:1px solid var(--line);margin:34px 0}
   .bar{padding:16px var(--gut)}
   .bar nav{gap:16px}
   .cform{grid-template-columns:1fr}
+}
+@media (max-width:520px){
+  .bar{flex-wrap:wrap;gap:14px}
+  .bar nav{width:100%;justify-content:space-between;gap:12px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}

@@ -17,7 +17,7 @@ ${abs(s, image || s.og_image || s.avatar) ? `<meta property="og:image" content="
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/public/site.css">
 <style>:root{--accent:${esc(s.accent || '#b0451f')}}</style>
-</head><body class="${cls}">${body}</body></html>`
+</head><body class="${cls}"><a class="skip" href="#main">Skip to content</a>${body}</body></html>`
 
 const header = s => `
 <header class="bar">
@@ -31,7 +31,7 @@ const header = s => `
 </header>`
 
 const footer = s => {
-  const links = [['GitHub', s.github], ['LinkedIn', s.linkedin], ['Twitter', s.twitter]].filter(([, u]) => u)
+  const links = [['GitHub', s.github], ['LinkedIn', s.linkedin], ['Twitter', s.twitter], ['Source', s.source]].filter(([, u]) => u)
   return `<footer class="foot">
   <span>© ${new Date().getFullYear()} ${esc(s.name)}</span>
   <span class="fl">${links.map(([l, u]) => `<a href="${esc(u)}" rel="noopener">${l}</a>`).join('')}
@@ -47,7 +47,7 @@ const workRow = p => `
     ${p.tags ? `<span class="tags">${list(p.tags).map(t => `<i>${esc(t)}</i>`).join('')}</span>` : ''}
   </span>
   <span class="row-m">
-    ${p.image ? `<img src="${esc(p.image)}" alt="" loading="lazy">` : '<span class="ph"></span>'}
+    ${p.image ? `<img src="${esc(p.image)}" alt="" loading="lazy" width="132" height="82">` : '<span class="ph"></span>'}
     <span class="yr">${esc(p.year || '')}</span>
     <span class="arw" aria-hidden="true">→</span>
   </span>
@@ -56,14 +56,14 @@ const workRow = p => `
 export const homePage = ({ s, projects, experience, skills, sent }) => layout({
   s,
   body: `${header(s)}
-<main>
+<main id="main">
 
 <section class="intro">
   ${s.available === '1' ? '<p class="pill"><i class="dot"></i>Available for new work</p>' : ''}
   <h1>${esc(s.name)}<br><span class="qi">${esc(s.role)}</span></h1>
   <p class="lede">${esc(s.tagline)}</p>
   <p class="meta">${s.location ? `<span>${esc(s.location)}</span>` : ''}<a href="mailto:${esc(s.email)}">${esc(s.email)}</a></p>
-  ${s.avatar ? `<img class="avatar" src="${esc(s.avatar)}" alt="${esc(s.name)}">` : ''}
+  ${s.avatar ? `<img class="avatar" src="${esc(s.avatar)}" alt="${esc(s.name)}" width="76" height="76">` : ''}
 </section>
 
 <section id="work" class="block">
@@ -118,10 +118,10 @@ ${experience.length ? `<section class="block">
 </main>${footer(s)}`,
 })
 
-export const projectPage = ({ s, p }) => layout({
+export const projectPage = ({ s, p, next }) => layout({
   s, title: `${p.title} — ${s.name}`, cls: 'sub', image: p.image,
   body: `${header(s)}
-<main>
+<main id="main">
 <article class="case">
   <a class="back" href="/#work">← All work</a>
   <p class="kick"><span>${esc(p.year || 'Project')}</span></p>
@@ -134,14 +134,15 @@ export const projectPage = ({ s, p }) => layout({
   </div>
   ${p.image ? `<img class="hero" src="${esc(p.image)}" alt="${esc(p.title)}">` : ''}
   <div class="prose wide">${md(p.description)}</div>
-  <p class="next"><a href="/#contact">Want something like this? Get in touch →</a></p>
+  <p class="next">${next ? `<a href="/work/${esc(next.slug)}">Next — ${esc(next.title)} →</a>` : ''}
+    <a href="/#contact">Want something like this? Get in touch →</a></p>
 </article>
 </main>${footer(s)}`,
 })
 
 export const notFound = s => layout({
   s, title: 'Not found', cls: 'sub',
-  body: `${header(s)}<main><section class="intro"><h1>404<br><span class="qi">Nothing here.</span></h1>
+  body: `${header(s)}<main id="main"><section class="intro"><h1>404<br><span class="qi">Nothing here.</span></h1>
   <p class="lede">That page moved or never existed.</p>
   <p class="meta"><a href="/">Back to the homepage</a></p></section></main>${footer(s)}`,
 })

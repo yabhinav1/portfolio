@@ -1,8 +1,31 @@
 # Portfolio + admin
 
-Server-rendered portfolio with a `/admin` panel. SQLite (Node's built-in
-`node:sqlite`), no build step, no framework on the frontend. Two runtime
-dependencies total: `express` and `multer`.
+**A portfolio site you edit from a browser, not a text editor.** Server-rendered
+Node, SQLite, and a `/admin` panel for projects, experience, skills and the
+contact inbox. No build step, no frontend framework, and two runtime
+dependencies total — `express` and `multer`.
+
+![The portfolio homepage](docs/screenshot.png)
+
+<details>
+<summary>The admin panel</summary>
+
+![The admin projects list](docs/admin.png)
+
+</details>
+
+![Node](https://img.shields.io/badge/node-%E2%89%A522-black)
+![Dependencies](https://img.shields.io/badge/runtime%20deps-2-black)
+![No build step](https://img.shields.io/badge/build%20step-none-black)
+![License](https://img.shields.io/badge/license-MIT-black)
+
+### Why it's built this way
+
+SQLite is Node's own `node:sqlite` — no native module to compile, nothing to
+install. Pages are template literals rendered per request, so there is no
+bundler, no hydration and no `dist/`. Adding an editable section to the admin is
+one entry in the `ENTITIES` object in `server.js` plus a `create table`; the
+list view, form, save and delete all come for free.
 
 ## Run it
 

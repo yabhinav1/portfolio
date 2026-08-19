@@ -131,6 +131,7 @@ const SETTING_GROUPS = [
   ['Links', [
     { n: 'resume', l: 'Résumé URL', t: 'text' }, { n: 'github', l: 'GitHub', t: 'text' },
     { n: 'linkedin', l: 'LinkedIn', t: 'text' }, { n: 'twitter', l: 'Twitter / X', t: 'text' },
+    { n: 'source', l: 'Source repo', t: 'text', hint: "Link to this site's code. Blank hides it." },
   ]],
   ['Appearance & SEO', [
     { n: 'available', l: 'Show "available for work" badge', t: 'bool' },
