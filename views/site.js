@@ -1,4 +1,4 @@
-import { esc, md, list, fill } from '../lib.js'
+import { esc, md, list, fill, V } from '../lib.js'
 
 const abs = (s, u) => !u ? '' : /^https?:/.test(u) ? u : `${s.site}${u}`
 
@@ -15,7 +15,7 @@ ${abs(s, image || s.og_image || s.avatar) ? `<meta property="og:image" content="
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>◗</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/public/site.css">
+<link rel="stylesheet" href="/public/site.css?v=${V.site}">
 <meta name="view-transition" content="same-origin">
 <script>document.documentElement.classList.add('js')</script>
 <style>:root{--accent:${esc(s.accent || '#b0451f')}}</style>
