@@ -61,6 +61,17 @@ h1{font:700 clamp(44px,8.2vw,86px)/1.02 var(--sans);letter-spacing:-.045em}
 .meta a:hover{border-color:var(--ink)}
 .avatar{width:76px;height:76px;object-fit:cover;margin-top:34px;filter:grayscale(1)}
 
+/* hero lines rise from behind a mask; no initial transform on the element itself,
+   so the text stays visible if animations never run */
+.ln{display:block;overflow:hidden;padding-bottom:.04em}
+.ln i{display:block;font-style:normal;animation:rise .8s cubic-bezier(.22,.61,.36,1) both}
+.ln:nth-child(2) i{animation-delay:.09s}
+@keyframes rise{from{transform:translateY(105%)}to{transform:translateY(0)}}
+
+.live{margin-top:26px;display:flex;flex-wrap:wrap;gap:10px 26px;
+  font:500 12px/1 var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--mut)}
+.live b{font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+
 /* ---- section frame ---- */
 .block{padding:60px 0;border-top:1px solid var(--line)}
 .kick{display:flex;align-items:baseline;gap:10px;margin-bottom:34px;
@@ -187,7 +198,11 @@ img.hero{border:1px solid var(--line);margin:34px 0}
   .bar{flex-wrap:wrap;gap:14px}
   .bar nav{width:100%;justify-content:space-between;gap:12px}
 }
+@view-transition{navigation:auto}
+::view-transition-old(root),::view-transition-new(root){animation-duration:.28s}
+
 @media (prefers-reduced-motion:reduce){
   *{transition:none!important;animation:none!important}
   .js .reveal{opacity:1;transform:none}
+  @view-transition{navigation:none}
 }
