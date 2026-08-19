@@ -6,7 +6,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createClient } from '@libsql/client'
 import { put } from '@vercel/blob'
-import { slugify, SCHEMA } from './lib.js'
+import { slugify, fill, SCHEMA } from './lib.js'
 import { homePage, projectPage, notFound } from './views/site.js'
 import { adminList, adminForm, adminSettings, adminInbox, loginPage } from './views/admin.js'
 
@@ -86,6 +86,12 @@ const shape = (s) => {
     users_k: Math.floor(Number(s.stat_users || 0) / 1000) + 'k',
   }
 }
+
+// Settings are rendered in several places (hero, about, meta tags), so fill them once
+// here rather than at each call site.
+const withStats = (s, st) => ({ ...s,
+  tagline: fill(s.tagline, st), about: fill(s.about, st),
+  seo_description: fill(s.seo_description, st), role: fill(s.role, st) })
 
 const statsFor = async (s) => {
   if (Date.now() - Number(s.stat_at || 0) < STATS_TTL) return shape(s)
@@ -202,9 +208,11 @@ if (!BLOB) app.use('/uploads', express.static(path.join(DATA, 'uploads'), { maxA
 
 /* ---------- public site ---------- */
 app.get('/', async (req, res) => {
-  const s = await getSettings()
+  const raw = await getSettings()
+  const stats = await statsFor(raw)
+  const s = withStats(raw, stats)
   res.send(homePage({
-  s, stats: await statsFor(s),
+  s, stats,
   projects: await all('select * from projects where published = 1 order by position asc, id desc'),
   experience: await rowsOf('experience'),
   skills: await rowsOf('skills'),
@@ -214,11 +222,12 @@ app.get('/', async (req, res) => {
 
 app.get('/work/:slug', async (req, res) => {
   const p = await get('select * from projects where slug = ? and published = 1', req.params.slug)
-  const s = await getSettings()
-  if (!p) return res.status(404).send(notFound(s))
+  const raw = await getSettings()
+  if (!p) return res.status(404).send(notFound(raw))
+  const s = withStats(raw, await statsFor(raw))
   const list = await all('select slug, title from projects where published = 1 order by position asc, id desc')
   const i = list.findIndex(x => x.slug === p.slug)
-  res.send(projectPage({ s, p, stats: await statsFor(s), next: list.length > 1 ? list[(i + 1) % list.length] : null }))
+  res.send(projectPage({ s, p, stats: await statsFor(raw), next: list.length > 1 ? list[(i + 1) % list.length] : null }))
 })
 
 app.get('/robots.txt', (_req, res) => res.type('text/plain')
