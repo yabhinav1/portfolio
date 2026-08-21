@@ -155,9 +155,11 @@ ${saved ? '<p class="toast" role="status">Saved. <a href="/" target="_blank">Vie
 </form>${uploadJS}`,
 })
 
-export const adminInbox = ({ messages, counts }) => shell({
+export const adminInbox = ({ messages, counts, error, sent }) => shell({
   title: 'Inbox', nav: 'messages', counts,
   body: `${head('Inbox', `${messages.length} message${messages.length === 1 ? '' : 's'} from the contact form`)}
+${error ? `<p class="ok bad" role="alert">${esc(error)}</p>` : ''}
+${sent ? `<p class="ok" role="status">Reply sent.</p>` : ''}
 ${messages.length ? `<div class="msgs">${messages.map(m => `
   <article class="msg ${m.seen ? '' : 'unread'}">
     <header>
@@ -170,6 +172,17 @@ ${messages.length ? `<div class="msgs">${messages.map(m => `
       </div>
     </header>
     <p>${esc(m.body).replace(/\n/g, '<br>')}</p>
+    ${m.reply ? `<div class="replied">
+      <b>Your reply</b> <time>${esc(new Date(m.replied).toLocaleString())}</time>
+      <p>${esc(m.reply).replace(/\n/g, '<br>')}</p>
+    </div>` : `<details class="replybox">
+      <summary>Reply</summary>
+      <form method="post" action="/admin/messages/${m.id}/reply">
+        <textarea name="reply" rows="4" required maxlength="5000"
+          placeholder="Your reply \u2014 this is emailed to ${esc(m.email)}."></textarea>
+        <button class="btn sm">Send reply</button>
+      </form>
+    </details>`}
   </article>`).join('')}</div>`
       : `<div class="empty"><p>No messages yet.</p><small>Anything sent through the contact form on your site lands here.</small></div>`}`,
 })
