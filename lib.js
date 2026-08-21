@@ -45,6 +45,7 @@ export const SCHEMA = `
     id integer primary key, label text default '', items text default '', position integer default 0);
   create table if not exists messages (
     id integer primary key, name text default '', email text default '', body text default '',
-    created text default '', seen integer default 0);
+    created text default '', seen integer default 0,
+    reply text default '', replied text default '');
 `
 

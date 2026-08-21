@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { createClient } from '@libsql/client'
 import { put } from '@vercel/blob'
 import { slugify, fill, SCHEMA } from './lib.js'
+import { notifyNew, sendMail } from './notify.js'
 import { homePage, projectPage, notFound } from './views/site.js'
 import { adminList, adminForm, adminSettings, adminInbox, loginPage } from './views/admin.js'
 
@@ -152,6 +153,10 @@ const rowById = (e, id) => get(`select * from ${e} where id = ?`, id)
 const init = async () => {
   if (!TURSO) await client.execute('pragma journal_mode = WAL')   // local file only
   await client.executeMultiple(SCHEMA)
+  // add reply columns to databases created before they existed
+  const cols = (await all('pragma table_info(messages)')).map(c => c.name)
+  for (const [c, def] of [['reply', "text default ''"], ['replied', "text default ''"]])
+    if (!cols.includes(c)) await run(`alter table messages add column ${c} ${def}`)
   if ((await get('select count(*) c from projects')).c) return
   const proj = `insert into projects (title,slug,summary,description,tags,year,featured,published,position)
     values (?,?,?,?,?,?,?,1,?)`
@@ -259,6 +264,7 @@ app.post('/contact', async (req, res) => {
   if (req.body.website) return res.redirect('/?sent#contact')          // honeypot
   if (!body || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).send('Please give a valid email and a message.')
   await run('insert into messages (name,email,body,created) values (?,?,?,?)', name, email, body, new Date().toISOString())
+  await notifyNew({ name, email, body })      // never throws; a failed ping must not lose the message
   res.redirect('/?sent#contact')
 })
 
@@ -308,11 +314,36 @@ app.post('/admin/settings', async (req, res) => {
   res.redirect('/admin/settings?saved')
 })
 
-app.get('/admin/messages', async (_req, res) =>
-  res.send(adminInbox({ messages: await all('select * from messages order by id desc'), counts: await counts() })))
+app.get('/admin/messages', async (req, res) =>
+  res.send(adminInbox({ messages: await all('select * from messages order by id desc'),
+    counts: await counts(), sent: 'sent' in req.query })))
 app.post('/admin/messages/:id/seen', async (req, res) => {
   await run('update messages set seen = 1 - seen where id = ?', Number(req.params.id))
   res.redirect('/admin/messages')
+})
+app.post('/admin/messages/:id/reply', async (req, res) => {
+  const id = Number(req.params.id)
+  const m = await get('select * from messages where id = ?', id)
+  const text = String(req.body.reply || '').trim().slice(0, 5000)
+  if (!m || !text) return res.redirect('/admin/messages')
+  const s = await getSettings()
+  try {
+    const sent = await sendMail({
+      to: m.email,
+      replyTo: s.email || undefined,
+      subject: `Re: your message to ${s.name || 'me'}`,
+      text,
+    })
+    if (!sent) return res.send(adminInbox({
+      messages: await all('select * from messages order by id desc'), counts: await counts(),
+      error: 'Email is not configured. Set RESEND_API_KEY (and MAIL_FROM) to send replies.' }))
+  } catch (e) {
+    return res.send(adminInbox({
+      messages: await all('select * from messages order by id desc'), counts: await counts(),
+      error: 'Could not send: ' + e.message }))
+  }
+  await run('update messages set reply = ?, replied = ?, seen = 1 where id = ?', text, new Date().toISOString(), id)
+  res.redirect('/admin/messages?sent')
 })
 app.post('/admin/messages/:id/delete', async (req, res) => {
   await run('delete from messages where id = ?', Number(req.params.id))
