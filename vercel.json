@@ -3,6 +3,6 @@
     "server.js": { "includeFiles": "public/**" }
   },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/server.js" }
+    { "source": "/public/(.*)", "destination": "/$1" }
   ]
 }
