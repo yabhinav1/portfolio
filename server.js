@@ -463,7 +463,7 @@ app.post('/admin/:entity/:id?', async (req, res) => {
   res.redirect(`/admin/${key}`)
 })
 
-app.use(async (req, res) => res.status(404).set("X-Request-Path", req.originalUrl).send(notFound(await getSettings())))
+app.use(async (_req, res) => res.status(404).send(notFound(await getSettings())))
 app.use((err, req, res, _next) => {
   console.error(err)
   const back = req.path.startsWith('/admin') ? '/admin' : '/'

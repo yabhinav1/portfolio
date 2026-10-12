@@ -158,6 +158,14 @@ vercel --prod
 `SESSION_SECRET` must be set in production — without it a new random secret is
 generated per cold start and every admin login is immediately invalidated.
 
+**How Vercel runs it.** A root `server.js` that imports `express` is detected as a
+zero-config Express backend. Vercel routes every path to the app by itself, serves
+`public/` from its CDN at the site root (`/site.css`, not `/public/site.css`) and
+ignores `express.static()`. `vercel.json` therefore has no catch-all rewrite (one
+would hand Express the rewritten path `/server.js` for every request) and a single
+rewrite that maps `/public/*` onto the CDN files, so the `/public/...` URLs used
+locally and stored in the database keep working.
+
 ### Anywhere with a disk (Fly.io, Railway, a VPS)
 
 `Dockerfile` and `fly.toml` are included and need no Turso or Blob at all — set
