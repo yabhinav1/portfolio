@@ -125,7 +125,7 @@ const SETTING_GROUPS = [
     { n: 'name', l: 'Your name', t: 'text' }, { n: 'role', l: 'Role / title', t: 'text' },
     { n: 'location', l: 'Location', t: 'text' }, { n: 'email', l: 'Contact email', t: 'text' },
     { n: 'tagline', l: 'Tagline', t: 'textarea', rows: 2, hint: 'One sentence under your name on the homepage.' },
-    { n: 'about', l: 'About', t: 'textarea', rows: 7, hint: 'Blank line = new paragraph. **bold** and [text](url) work.' },
+    { n: 'about', l: 'About', t: 'textarea', rows: 7, hint: 'Blank line = new paragraph. **bold**, *italic*, `code`, [text](url) and - lists work.' },
     { n: 'avatar', l: 'Photo', t: 'image' },
   ]],
   ['Links', [
@@ -134,7 +134,7 @@ const SETTING_GROUPS = [
     { n: 'source', l: 'Source repo', t: 'text', hint: "Link to this site's code. Blank hides it." },
   ]],
   ['Appearance & SEO', [
-    { n: 'available', l: 'Show "available for work" badge', t: 'bool' },
+    { n: 'available', l: 'Show the "open to new work" badge', t: 'bool' },
     { n: 'accent', l: 'Accent colour', t: 'text', hint: 'Any CSS colour — #b0451f, #2f4fd8, teal…' },
     { n: 'seo_title', l: 'Browser tab title', t: 'text', hint: 'Blank = "Name — Role".' },
     { n: 'seo_description', l: 'Search description', t: 'textarea', rows: 2, hint: 'Blank = your tagline.' },

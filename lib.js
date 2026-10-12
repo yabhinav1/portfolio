@@ -14,12 +14,53 @@ export const V = { site: hash('site.css'), admin: hash('admin.css') }
 export const esc = s => String(s ?? '').replace(/[&<>"']/g,
   c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 
-// paragraphs, bold, links, line breaks
-export const md = s => esc(s).split(/\n{2,}/).filter(Boolean).map(p =>
-  `<p>${p.replace(/\n/g, '<br>')
+/* ---------- markdown ----------
+   Paragraphs, ## and ### headings, - and 1. lists, ```fenced code```, ![alt](src) on a
+   line of its own, and inline **bold**, *italic*, `code`, [text](url). The whole input is
+   escaped before any rule runs, so content can never inject HTML. Single newline = <br>. */
+
+const inline = s => s.split(/(`[^`\n]+`)/).map((seg, i) => i % 2
+  ? `<code>${seg.slice(1, -1)}</code>`
+  : seg
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\[(.+?)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')}</p>`
+    .replace(/(^|[^*\w])\*([^*\n]+?)\*(?![*\w])/g, '$1<em>$2</em>')
+    .replace(/\[(.+?)\]\((https?:\/\/[^\s)]+|\/[^\s)]*)\)/g, (m, t, u) =>
+      `<a href="${u}"${u.startsWith('/') ? '' : ' target="_blank" rel="noopener"'}>${t}</a>`)
 ).join('')
+
+// Group lines into blocks: a fenced code block is one block whatever it contains,
+// anything else is split on blank lines.
+const blocks = text => {
+  const out = []
+  let cur = [], fence = null
+  const flush = () => { if (cur.length) out.push(cur); cur = [] }
+  for (const line of text.split('\n')) {
+    if (fence) { cur.push(line); if (line.trim() === fence) { flush(); fence = null }; continue }
+    const f = line.match(/^(`{3,})/)
+    if (f) { flush(); fence = f[1]; cur.push(line); continue }
+    if (!line.trim()) flush()
+    else cur.push(line)
+  }
+  flush()
+  return out
+}
+
+const IMG = /^!\[(.*?)\]\((https?:\/\/[^\s)]+|\/[^\s)]+)\)$/
+
+export const md = s => blocks(esc(s)).map(lines => {
+  const first = lines[0]
+  if (/^`{3,}/.test(first)) {
+    const closed = lines.length > 1 && /^`{3,}$/.test(lines.at(-1).trim())
+    return `<pre><code>${lines.slice(1, closed ? -1 : undefined).join('\n')}</code></pre>`
+  }
+  const h = lines.length === 1 && first.match(/^(#{2,3})\s+(.+)/)
+  if (h) return `<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`
+  if (lines.every(l => /^[-*]\s+/.test(l))) return `<ul>${lines.map(l => `<li>${inline(l.replace(/^[-*]\s+/, ''))}</li>`).join('')}</ul>`
+  if (lines.every(l => /^\d+[.)]\s+/.test(l))) return `<ol>${lines.map(l => `<li>${inline(l.replace(/^\d+[.)]\s+/, ''))}</li>`).join('')}</ol>`
+  const img = lines.length === 1 && first.match(IMG)
+  if (img) return `<figure><img src="${img[2]}" alt="${img[1]}" loading="lazy">${img[1] ? `<figcaption>${inline(img[1])}</figcaption>` : ''}</figure>`
+  return `<p>${inline(lines.join('<br>'))}</p>`
+}).join('')
 
 export const slugify = s => String(s || '').toLowerCase().trim()
   .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60)
@@ -47,5 +88,5 @@ export const SCHEMA = `
     id integer primary key, name text default '', email text default '', body text default '',
     created text default '', seen integer default 0,
     reply text default '', replied text default '');
+  create table if not exists hits (key text primary key, times text not null default '', last integer default 0);
 `
-
