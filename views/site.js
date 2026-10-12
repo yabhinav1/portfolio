@@ -83,7 +83,7 @@ const header = s => `
   <nav>
     <a href="/#work">Work</a>
     <a href="/#about">About</a>
-    ${s.resume ? `<a href="${esc(s.resume)}">Résumé</a>` : ''}
+    ${s.resume ? `<a href="${esc(s.resume)}" target="_blank" rel="noopener">Résumé</a>` : ''}
     <a class="ghost" href="/#contact">Get in touch</a>
   </nav>
 </header>`
@@ -92,7 +92,7 @@ const footer = s => {
   const links = [['GitHub', s.github], ['LinkedIn', s.linkedin], ['Twitter', s.twitter], ['Source', s.source]].filter(([, u]) => u)
   return `<footer class="foot">
   <span>© ${new Date().getFullYear()} ${esc(s.name)}</span>
-  <span class="fl">${links.map(([l, u]) => `<a href="${esc(u)}" rel="noopener">${l}</a>`).join('')}
+  <span class="fl">${links.map(([l, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${l}</a>`).join('')}
   <a href="mailto:${esc(s.email)}">Email</a></span>
 </footer>`
 }
@@ -144,7 +144,7 @@ const githubSection = (g, s) => {
   </div>
   <p class="ghFoot">
     <span class="ghLegend" aria-hidden="true">Less <i data-l="0"></i><i data-l="1"></i><i data-l="2"></i><i data-l="3"></i><i data-l="4"></i> More</span>
-    <a href="${esc(s.github)}" rel="noopener">@${esc(g.user)} on GitHub →</a>
+    <a href="${esc(s.github)}" target="_blank" rel="noopener">@${esc(g.user)} on GitHub →</a>
   </p>
 </section>`
 }
@@ -229,8 +229,8 @@ export const projectPage = ({ s, p, next, stats = {} }) => layout({
   ${p.summary ? `<p class="lede">${esc(fill(p.summary, stats))}</p>` : ''}
   <div class="caseMeta">
     ${p.tags ? `<div><dt>Built with</dt><dd>${list(p.tags).map(t => `<i>${esc(t)}</i>`).join('')}</dd></div>` : ''}
-    ${p.link ? `<div><dt>Live</dt><dd><a href="${esc(p.link)}" rel="noopener">Visit site →</a></dd></div>` : ''}
-    ${p.repo ? `<div><dt>Code</dt><dd><a href="${esc(p.repo)}" rel="noopener">Repository →</a></dd></div>` : ''}
+    ${p.link ? `<div><dt>Live</dt><dd><a href="${esc(p.link)}" target="_blank" rel="noopener">Visit site →</a></dd></div>` : ''}
+    ${p.repo ? `<div><dt>Code</dt><dd><a href="${esc(p.repo)}" target="_blank" rel="noopener">Repository →</a></dd></div>` : ''}
   </div>
   ${p.image ? `<img class="hero" src="${esc(p.image)}" alt="${esc(p.title)}">` : ''}
   <div class="prose wide">${md(fill(p.description, stats))}</div>
