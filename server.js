@@ -470,9 +470,11 @@ app.use((err, req, res, _next) => {
   res.status(400).send(`<p style="font:16px system-ui;padding:40px">${err.message}</p><p style="font:16px system-ui;padding:0 40px"><a href="${back}">Go back</a></p>`)
 })
 
-// Listen only when run directly (node server.js, node --watch server.js). Vercel and
-// the tests import the app instead.
-if (process.argv[1] && path.resolve(process.argv[1]) === here) {
+// Listen only when run directly (node server.js, node --watch server.js). The tests
+// import the app instead. Vercel must never see a listen: its launcher may run this
+// file as the main module, and a listening server is proxied with the rewritten URL,
+// so every path except / stops matching.
+if (!process.env.VERCEL && process.argv[1] && path.resolve(process.argv[1]) === here) {
   app.listen(PORT, () => console.log(`\n  site   http://localhost:${PORT}\n  admin  http://localhost:${PORT}/admin\n`))
 }
 
