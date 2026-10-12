@@ -61,23 +61,60 @@ npm start
 - **Image upload** — drops files in `uploads/`, served from `/uploads`. Images
   only, 8 MB cap. You can also paste any external URL instead.
 
-Descriptions take a 4-rule markdown: blank line = paragraph, `**bold**`,
-`[text](url)`, single newline = line break.
+Descriptions take a small markdown, escaped before any rule runs so content can
+never inject HTML:
+
+| Write | Get |
+|---|---|
+| blank line | new paragraph (a single newline is a line break) |
+| `**bold**`, `*italic*`, `` `code` `` | inline marks |
+| `[text](url)` | link; external links open in a new tab |
+| `## Heading`, `### Sub-heading` | section headings inside a case study |
+| `- item` / `1. item` lines | bulleted / numbered list |
+| `![Caption](image-url)` on its own line | full-width figure with the caption under it |
+| ```` ``` ```` fences | code block |
 
 ## Files
 
 ```
-server.js        routes, auth, schema, entity specs
+server.js        routes, auth, headers, rate limits, schema, entity specs
 lib.js           escape / markdown / slugify
-views/site.js    public pages
+notify.js        Discord webhook + Resend email for new messages and replies
+views/site.js    public pages (and the two inline scripts the CSP allows)
 views/admin.js   admin pages
 public/*.css     two stylesheets
+public/fonts/    Inter and JetBrains Mono, self-hosted latin subsets
+test/            node:test suite: `npm test`
 push-content.js  one-shot copy of local content into Turso
 portfolio.db     created on first run (gitignored)
 uploads/         uploaded images (gitignored)
 Dockerfile       production image
 fly.toml         Fly.io config, volume mounted at /data
 ```
+
+## Security
+
+- **Headers.** Every response carries a Content-Security-Policy, `X-Content-Type-Options`,
+  `Referrer-Policy`, `X-Frame-Options`, `Permissions-Policy` and (over HTTPS) HSTS. Public
+  pages allow only their two inline scripts, by hash; the admin keeps `'unsafe-inline'`
+  for its confirm dialogs but sits behind the login. Images may load from any `https:`
+  URL because the admin accepts pasted image links.
+- **Rate limits** live in a `hits` table, not in memory, so they hold on serverless
+  where every request may be a fresh process. Login: 10 attempts per address per 15
+  minutes. Contact form: 5 messages per address per hour, plus a honeypot field.
+- **Fonts** are served from `public/fonts/`, so a visit makes no third-party request.
+- **Login** is a signed, HttpOnly, SameSite cookie compared in constant time. There is
+  no session store to leak.
+
+## Tests
+
+```bash
+npm test
+```
+
+`test/lib.test.js` covers escaping, markdown and slugs. `test/app.test.js` boots the app
+against a throwaway database and checks headers, CSP hashes against the shipped scripts,
+auth, rate limits, the contact form and a project round-trip through the admin.
 
 Adding a new editable section = one entry in `ENTITIES` in `server.js` plus a
 `create table`. The list page, form, save, and delete all come for free.
@@ -144,11 +181,14 @@ Back up `portfolio.db` and `uploads/` together; they're the whole site.
 Project text can embed `{{servers}}`, `{{users}}`, `{{users_k}}` and `{{ping}}`.
 They are filled at render from `annie.monster/api/status`, cached in the settings
 table and refreshed in the background once the stored copy is older than six
-hours, so no page load waits on the network. If the API is unreachable the last
+hours, so no page load waits on the network. On Vercel the refresh is handed to
+the runtime's `waitUntil`, so it finishes after the response instead of being
+killed with the function. If the API is unreachable the last
 known values are used and the refresh backs off until the next window.
 
 ## Known limits
 
-- Contact-form rate limit is in-memory, so it resets on restart.
-- Markdown covers paragraphs, bold, links and line breaks, not CommonMark.
+- Markdown covers the table above, not CommonMark. No tables, no nested lists, no raw HTML.
 - One admin user, password in an env var.
+- If uploads move to Blob, any setting still pointing at a local `/uploads/...` path is
+  ignored rather than served broken; re-upload those images from the admin.
