@@ -195,6 +195,14 @@ the runtime's `waitUntil`, so it finishes after the response instead of being
 killed with the function. If the API is unreachable the last
 known values are used and the refresh backs off until the next window.
 
+## GitHub activity
+
+When the GitHub link is set in Settings, the homepage shows a year of contributions
+as a calendar heatmap with the total and current and longest streaks. The data comes
+from GitHub's public calendar page for that user, so no token is needed. It is cached
+in the settings table and refreshed the same way as the live stats: every six hours
+in the background, with a 15-minute retry after a failure.
+
 ## Known limits
 
 - Markdown covers the table above, not CommonMark. No tables, no nested lists, no raw HTML.

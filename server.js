@@ -6,7 +6,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createClient } from '@libsql/client'
 import { put } from '@vercel/blob'
-import { slugify, fill, SCHEMA } from './lib.js'
+import { slugify, fill, SCHEMA, parseContributions, streaks } from './lib.js'
 import { notifyNew, sendMail } from './notify.js'
 import { homePage, projectPage, notFound, SCRIPT } from './views/site.js'
 import { adminList, adminForm, adminSettings, adminInbox, loginPage } from './views/admin.js'
@@ -141,6 +141,44 @@ const context = async () => {
   const raw = await getSettings()
   const stats = await statsFor(raw)
   return { s: withStats(raw, stats), stats }
+}
+
+/* ---------- GitHub activity, same cache pattern as the stats ----------
+   The public calendar at github.com/users/<name>/contributions needs no token. The
+   user comes from the GitHub link in settings, so there is nothing extra to configure. */
+const ghUser = s => (s.github || '').match(/github\.com\/([\w.-]+)/)?.[1] || ''
+let ghRefreshing = false
+const refreshGithub = async (user) => {
+  if (ghRefreshing) return
+  ghRefreshing = true
+  try {
+    const r = await fetch(`https://github.com/users/${user}/contributions`,
+      { headers: { 'user-agent': 'Mozilla/5.0 (portfolio; +' + SITE + ')' }, signal: AbortSignal.timeout(8000) })
+    if (!r.ok) throw new Error(`status ${r.status}`)
+    const { days, total } = parseContributions(await r.text())
+    if (!days.length) throw new Error('no calendar in page')
+    await Promise.all([
+      setSetting('gh_days', JSON.stringify(days.map(x => [x.d, x.n, x.l]))),
+      setSetting('gh_total', String(total)),
+      setSetting('gh_user', user),
+      setSetting('gh_at', String(Date.now())),
+    ])
+  } catch (e) {
+    console.warn('github refresh failed:', e.message)
+    await setSetting('gh_at', String(Date.now() - STATS_TTL + STATS_RETRY))
+  } finally {
+    ghRefreshing = false
+  }
+}
+const githubFor = async (s) => {
+  const user = ghUser(s)
+  if (!user) return null
+  const stale = Date.now() - Number(s.gh_at || 0) >= STATS_TTL || s.gh_user !== user
+  if (stale && !s.gh_days) { await refreshGithub(user); s = await getSettings() }   // nothing stored yet: wait
+  else if (stale) waitUntil(refreshGithub(user))
+  if (!s.gh_days || s.gh_user !== user) return null
+  const days = JSON.parse(s.gh_days).map(([d, n, l]) => ({ d, n, l }))
+  return { user, days, total: Number(s.gh_total || 0), ...streaks(days) }
 }
 
 /* ---------- entities: one spec drives list, form, save, delete ---------- */
@@ -297,6 +335,7 @@ app.get('/', async (req, res) => {
     image: s.og_image || s.avatar || projects.find(p => p.image)?.image || '',
     experience: await rowsOf('experience'),
     skills: await rowsOf('skills'),
+    github: await githubFor(s),
     sent: 'sent' in req.query,
   }))
 })

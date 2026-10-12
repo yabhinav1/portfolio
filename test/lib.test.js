@@ -52,3 +52,25 @@ test('fill and list', () => {
   assert.equal(fill('{{servers}} servers, {{nope}}', { servers: 307 }), '307 servers, {{nope}}')
   assert.deepEqual(list(' a, b ,, c '), ['a', 'b', 'c'])
 })
+
+test('parseContributions reads dates, levels and tooltip counts', async () => {
+  const { parseContributions, streaks } = await import('../lib.js')
+  const html = `
+    <td data-date="2026-10-02" id="c-0-1" data-level="2" class="ContributionCalendar-day"></td>
+    <td data-date="2026-10-01" id="c-0-0" data-level="0" class="ContributionCalendar-day"></td>
+    <td data-date="2026-10-03" id="c-0-2" data-level="4" class="ContributionCalendar-day"></td>
+    <td data-date="2026-10-04" id="c-0-3" data-level="0" class="ContributionCalendar-day"></td>
+    <tool-tip for="c-0-0">No contributions on October 1st.</tool-tip>
+    <tool-tip for="c-0-1">3 contributions on October 2nd.</tool-tip>
+    <tool-tip for="c-0-2">12 contributions on October 3rd.</tool-tip>
+    <tool-tip for="c-0-3">No contributions on October 4th.</tool-tip>`
+  const { days, total } = parseContributions(html)
+  assert.deepEqual(days.map(x => x.d), ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04'], 'sorted by date')
+  assert.deepEqual(days.map(x => x.n), [0, 3, 12, 0])
+  assert.deepEqual(days.map(x => x.l), [0, 2, 4, 0])
+  assert.equal(total, 15)
+  assert.deepEqual(streaks(days), { current: 2, longest: 2 }, 'today empty still counts the run up to yesterday')
+  assert.deepEqual(streaks(days.slice(0, 3)), { current: 2, longest: 2 })
+  assert.deepEqual(streaks([{ n: 1 }, { n: 0 }, { n: 0 }]), { current: 0, longest: 1 })
+  assert.deepEqual(parseContributions('<html></html>'), { days: [], total: 0 })
+})

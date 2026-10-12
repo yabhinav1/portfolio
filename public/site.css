@@ -151,6 +151,28 @@ h1{font:700 clamp(44px,8.2vw,86px)/1.02 var(--sans);letter-spacing:-.045em}
 .exp h3 span{color:var(--mut);font-weight:400}
 .loc{font:500 11px/1 var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--mut);margin:7px 0 11px}
 
+/* ---- github activity ---- */
+.ghStats{display:flex;flex-wrap:wrap;gap:10px 26px;margin-bottom:22px;
+  font:500 12px/1 var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--mut)}
+.ghStats b{font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
+.ghWrap{overflow-x:auto;padding-bottom:6px}
+.ghMonths,.ghGrid{--c:11px;--g:3px;display:grid;grid-template-columns:repeat(53,var(--c));
+  grid-auto-columns:var(--c);gap:var(--g);min-width:max-content}
+.ghMonths{margin-bottom:6px;font:500 10px/1 var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--mut)}
+.ghMonths span{grid-row:1;white-space:nowrap}
+.ghGrid{grid-template-rows:repeat(7,var(--c));grid-auto-flow:column}
+.ghGrid i,.ghLegend i{display:block;width:var(--c,10px);height:var(--c,10px);border-radius:2px;background:var(--line)}
+.ghGrid i.pad{background:transparent}
+.ghGrid i[data-l="1"],.ghLegend i[data-l="1"]{background:color-mix(in srgb,var(--accent) 30%,var(--bg))}
+.ghGrid i[data-l="2"],.ghLegend i[data-l="2"]{background:color-mix(in srgb,var(--accent) 55%,var(--bg))}
+.ghGrid i[data-l="3"],.ghLegend i[data-l="3"]{background:color-mix(in srgb,var(--accent) 80%,var(--bg))}
+.ghGrid i[data-l="4"],.ghLegend i[data-l="4"]{background:var(--accent)}
+.ghGrid i:not(.pad):hover{outline:1px solid var(--ink);outline-offset:1px}
+.ghFoot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px 20px;margin-top:16px;
+  font:500 12px/1 var(--mono);color:var(--mut)}
+.ghLegend{display:inline-flex;align-items:center;gap:3px}
+.ghFoot a{color:var(--ink);border-bottom:1px solid var(--accent);padding-bottom:2px}
+
 /* ---- contact ---- */
 .contact{padding-bottom:76px}
 h2.big{font:700 clamp(38px,6.4vw,68px)/1.03 var(--sans);letter-spacing:-.045em;margin-bottom:44px}

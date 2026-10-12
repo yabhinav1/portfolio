@@ -90,3 +90,33 @@ export const SCHEMA = `
     reply text default '', replied text default '');
   create table if not exists hits (key text primary key, times text not null default '', last integer default 0);
 `
+
+/* ---------- GitHub contributions ----------
+   Parses the public calendar at github.com/users/<name>/contributions (no token
+   needed). Returns days sorted by date with the count and GitHub's own 0-4 level. */
+const attr = (tag, name) => tag.match(new RegExp('(?:^|\\s)' + name + '="([^"]*)"'))?.[1]
+export const parseContributions = html => {
+  const counts = {}
+  for (const m of html.matchAll(/<tool-tip\b([^>]*)>([^<]*)/g)) {
+    const id = attr(m[1], 'for')
+    if (id) counts[id] = Number.parseInt(m[2], 10) || 0
+  }
+  const days = []
+  for (const m of html.matchAll(/<td\b[^>]*ContributionCalendar-day[^>]*>/g)) {
+    const d = attr(m[0], 'data-date')
+    if (!d) continue
+    days.push({ d, n: counts[attr(m[0], 'id')] ?? 0, l: Number(attr(m[0], 'data-level') || 0) })
+  }
+  days.sort((a, b) => a.d < b.d ? -1 : 1)
+  return { days, total: days.reduce((s, x) => s + x.n, 0) }
+}
+
+// Current streak counts back from the last day, allowing today to still be empty.
+export const streaks = days => {
+  let longest = 0, run = 0
+  for (const x of days) { run = x.n ? run + 1 : 0; if (run > longest) longest = run }
+  let current = 0
+  const i0 = days.length && !days.at(-1).n ? days.length - 2 : days.length - 1
+  for (let i = i0; i >= 0 && days[i].n; i--) current++
+  return { current, longest }
+}

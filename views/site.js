@@ -9,7 +9,7 @@ export const SCRIPT = {
   flag: "document.documentElement.classList.add('js')",
   main: `
 (() => {
-  const sel = '.intro > *:not(h1), .rows .row, .split > div, .exp article, h2.big, .cwrap > *, .case > *'
+  const sel = '.intro > *:not(h1), .rows .row, .split > div, .exp article, .gh > *, h2.big, .cwrap > *, .case > *'
   const els = [...document.querySelectorAll(sel)]
   if (!els.length || !('IntersectionObserver' in window)) return
   const io = new IntersectionObserver((es) => es.forEach(e => {
@@ -111,7 +111,45 @@ const workRow = (p, st) => `
   </span>
 </a>`
 
-export const homePage = ({ s, projects, experience, skills, sent, stats = {}, image = '' }) => layout({
+/* ---------- GitHub activity: a year of contributions as a calendar heatmap ----------
+   One hue (the accent) stepping light to dark for magnitude, GitHub's own 0-4 levels,
+   a title on every cell, and a plain-text summary for screen readers. */
+const fmtDate = d => new Date(d + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+const n = v => Number(v).toLocaleString('en-US')
+const githubSection = (g, s) => {
+  if (!g || !g.days.length) return ''
+  // GitHub's grid starts on a Sunday; pad so weekdays line up in rows
+  const pad = new Date(g.days[0].d + 'T00:00:00Z').getUTCDay()
+  const cells = Array(pad).fill('<i class="pad"></i>').concat(g.days.map(x =>
+    `<i data-l="${x.l}" title="${x.n === 0 ? 'No contributions' : `${n(x.n)} contribution${x.n === 1 ? '' : 's'}`} on ${fmtDate(x.d)}"></i>`))
+  const months = []
+  g.days.forEach((x, i) => {
+    if (x.d.slice(8) !== '01') return
+    const col = Math.floor((i + pad) / 7) + 1
+    if (months.length && col - months.at(-1).col < 3) months.pop()   // two labels in one spot: keep the later one
+    months.push({ col, m: new Date(x.d + 'T00:00:00Z').toLocaleString('en-US', { month: 'short', timeZone: 'UTC' }) })
+  })
+  const summary = `${n(g.total)} contributions on GitHub in the last year. Current streak ${g.current} day${g.current === 1 ? '' : 's'}, longest ${g.longest}.`
+  return `
+<section class="block gh">
+  <h2 class="kick"><span>GitHub activity</span><b>${n(g.total)}</b></h2>
+  <p class="ghStats">
+    <span><b>${n(g.total)}</b> contributions in the last year</span>
+    <span><b>${g.current}</b> day${g.current === 1 ? '' : 's'} current streak</span>
+    <span><b>${g.longest}</b> day${g.longest === 1 ? '' : 's'} longest streak</span>
+  </p>
+  <div class="ghWrap">
+    <div class="ghMonths" aria-hidden="true">${months.map(m => `<span style="grid-column:${m.col}">${m.m}</span>`).join('')}</div>
+    <div class="ghGrid" role="img" aria-label="${esc(summary)}">${cells.join('')}</div>
+  </div>
+  <p class="ghFoot">
+    <span class="ghLegend" aria-hidden="true">Less <i data-l="0"></i><i data-l="1"></i><i data-l="2"></i><i data-l="3"></i><i data-l="4"></i> More</span>
+    <a href="${esc(s.github)}" rel="noopener">@${esc(g.user)} on GitHub →</a>
+  </p>
+</section>`
+}
+
+export const homePage = ({ s, projects, experience, skills, sent, stats = {}, image = '', github = null }) => layout({
   s, image,
   body: `${header(s)}
 <main id="main">
@@ -160,7 +198,7 @@ ${experience.length ? `<section class="block">
       </div>
     </article>`).join('')}</div>
 </section>` : ''}
-
+${githubSection(github, s)}
 <section id="contact" class="block contact">
   <h2 class="big">Let's build<br><span class="qi">something.</span></h2>
   <div class="cwrap">
