@@ -5,3 +5,5 @@ portfolio.db-wal
 uploads/*
 !uploads/.gitkeep
 .env
+.vercel
+.env*
