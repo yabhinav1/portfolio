@@ -138,3 +138,16 @@ test('login attempts are capped at 10 per address', async () => {
   const blocked = await post('/admin/login', { password: 'correct horse' })
   assert.equal(blocked.status, 429, 'even the right password is refused once the limit is hit')
 })
+
+test('admin can refresh the feeds and sees why a refresh failed', async () => {
+  const cookie = await login()
+  const r = await post('/admin/feeds/refresh', {}, { cookie })
+  assert.equal(r.status, 302)
+  assert.equal(r.headers.get('location'), '/admin/settings')
+  const page = await (await get('/admin/settings', { cookie })).text()
+  assert.match(page, /Live stats/)
+  // the test box has no key, so the gated API refuses: the admin must be told, not left guessing
+  assert.match(page, /last attempt failed: .*status 403|nothing fetched yet/)
+  assert.match(page, /GitHub activity · no GitHub link set/)
+  assert.match(page, /Refresh both now/)
+})

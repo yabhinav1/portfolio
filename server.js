@@ -427,6 +427,12 @@ app.get('/admin/settings', async (req, res) => {
   const s = await getSettings()
   res.send(adminSettings({ s, counts: await counts(), saved: 'saved' in req.query, feeds: feedStatus(s) }))
 })
+// Fetch both feeds right now, whatever their age, then show the result.
+app.post('/admin/feeds/refresh', async (_req, res) => {
+  const s = await getSettings()
+  await Promise.all([refreshStats(), ghUser(s) ? refreshGithub(ghUser(s)) : null])
+  res.redirect('/admin/settings')
+})
 const BOOL_SETTINGS = new Set(['available'])
 app.post('/admin/settings', async (req, res) => {
   for (const k of Object.keys(DEFAULTS)) {

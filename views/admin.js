@@ -156,7 +156,8 @@ export const adminSettings = ({ s, counts, saved, feeds }) => shell({
   title: 'Settings', nav: 'settings', counts,
   body: `${head('Settings', 'Everything on the site that isn\'t a project')}
 ${saved ? '<p class="toast" role="status">Saved. <a href="/" target="_blank">View the site ↗</a></p>' : ''}
-${feeds ? feedLine('Live stats', feeds.stats) + feedLine('GitHub activity', feeds.github) : ''}
+${feeds ? `${feedLine('Live stats', feeds.stats)}${feedLine('GitHub activity', feeds.github)}
+<form method="post" action="/admin/feeds/refresh" class="refresh"><button class="btn sm">Refresh both now</button></form>` : ''}
 <form method="post" action="/admin/settings" class="form">
   ${SETTING_GROUPS.map(([g, fields]) => `
     <section class="group"><h2>${esc(g)}</h2>
