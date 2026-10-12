@@ -8,10 +8,11 @@ import { createClient } from '@libsql/client'
 import { put } from '@vercel/blob'
 import { slugify, fill, SCHEMA } from './lib.js'
 import { notifyNew, sendMail } from './notify.js'
-import { homePage, projectPage, notFound } from './views/site.js'
+import { homePage, projectPage, notFound, SCRIPT } from './views/site.js'
 import { adminList, adminForm, adminSettings, adminInbox, loginPage } from './views/admin.js'
 
-const root = path.dirname(fileURLToPath(import.meta.url))
+const here = fileURLToPath(import.meta.url)
+const root = path.dirname(here)
 const PORT = process.env.PORT || 3000
 const PASSWORD = process.env.ADMIN_PASSWORD || 'admin'
 const SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex')
@@ -23,6 +24,10 @@ const TURSO = !!process.env.TURSO_DATABASE_URL
 const BLOB = !!(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID || process.env.VERCEL)
 if (!BLOB) fs.mkdirSync(path.join(DATA, 'uploads'), { recursive: true })
 if (!process.env.ADMIN_PASSWORD) console.warn('⚠  ADMIN_PASSWORD not set, using "admin". Set it before deploying.')
+
+// On Vercel, work started after the response only finishes if the runtime is told
+// about it. Anywhere else this is a no-op and the promise simply runs.
+const waitUntil = p => globalThis[Symbol.for('@vercel/request-context')]?.get?.()?.waitUntil?.(p)
 
 /* ---------- db ---------- */
 if (process.env.VERCEL && !TURSO) {
@@ -46,11 +51,32 @@ const DEFAULTS = {
   github: '', linkedin: '', twitter: '', source: '', accent: '#b0451f',
   seo_title: '', seo_description: '', og_image: '',
 }
+// Local /uploads/ paths stop existing once uploads live in Blob storage, so a stale
+// value would mean a broken link preview or avatar. Treat it as unset instead.
+const usable = u => (BLOB && /^\/uploads\//.test(u || '')) ? '' : (u || '')
 const getSettings = async () => {
   const rows = await all('select key, value from settings')
-  return { ...DEFAULTS, ...Object.fromEntries(rows.map(r => [r.key, r.value])), site: SITE }
+  const s = { ...DEFAULTS, ...Object.fromEntries(rows.map(r => [r.key, r.value])), site: SITE }
+  s.og_image = usable(s.og_image)
+  s.avatar = usable(s.avatar)
+  return s
 }
 const setSetting = (k, v) => run('insert into settings(key,value) values(?,?) on conflict(key) do update set value=excluded.value', k, v)
+
+/* ---------- rate limiting, stored in the database ----------
+   An in-memory map is useless on serverless, where each request may land on a fresh
+   process. One small table instead: key -> JSON list of recent timestamps. */
+const limited = async (key, max, windowMs) => {
+  const now = Date.now()
+  const row = await get('select times from hits where key = ?', key)
+  const recent = (row ? JSON.parse(row.times) : []).filter(t => now - t < windowMs)
+  if (recent.length >= max) return true
+  recent.push(now)
+  await run('insert into hits(key,times,last) values(?,?,?) on conflict(key) do update set times=excluded.times, last=excluded.last',
+    key, JSON.stringify(recent), now)
+  if (Math.random() < 0.02) await run('delete from hits where last < ?', now - 86400e3)   // occasional sweep
+  return false
+}
 
 /* ---------- live stats, refreshed in the background ---------- */
 const STATS_URL = 'https://annie.monster/api/status'
@@ -100,11 +126,19 @@ const statsFor = async (s) => {
   if (Date.now() - Number(s.stat_at || 0) < STATS_TTL) return shape(s)
   // Nothing stored yet (fresh deploy): wait, otherwise the page would print zeros.
   if (!s.stat_servers) { await refreshStats(); return shape(await getSettings()) }
-  refreshStats()
+  waitUntil(refreshStats())
   return shape(s)
 }
 
+// Settings plus stats, resolved once per request.
+const context = async () => {
+  const raw = await getSettings()
+  const stats = await statsFor(raw)
+  return { s: withStats(raw, stats), stats }
+}
+
 /* ---------- entities: one spec drives list, form, save, delete ---------- */
+const MD_HINT = 'Blank line = new paragraph. **bold**, *italic*, `code`, [text](url), ## headings, - lists, ```code blocks``` and ![caption](image-url) on its own line all work.'
 const ENTITIES = {
   projects: {
     label: 'Projects', singular: 'Project', order: 'position asc, id desc',
@@ -112,7 +146,7 @@ const ENTITIES = {
     fields: [
       { n: 'title', l: 'Title', t: 'text', req: true },
       { n: 'summary', l: 'One-line summary', t: 'text', hint: 'Shown in the work list. Lead with the outcome, not the stack.' },
-      { n: 'description', l: 'Full description', t: 'textarea', rows: 8, hint: 'Blank line = new paragraph. **bold** and [text](url) work.' },
+      { n: 'description', l: 'Full description', t: 'textarea', rows: 14, hint: MD_HINT },
       { n: 'image', l: 'Cover image', t: 'image' },
       { n: 'tags', l: 'Tags', t: 'text', hint: 'Comma separated: React, Postgres, Figma' },
       { n: 'link', l: 'Live URL', t: 'text' },
@@ -132,7 +166,7 @@ const ENTITIES = {
       { n: 'company', l: 'Company', t: 'text' },
       { n: 'period', l: 'Period', t: 'text', hint: '2023 to present' },
       { n: 'location', l: 'Location', t: 'text' },
-      { n: 'description', l: 'What you did', t: 'textarea', rows: 5 },
+      { n: 'description', l: 'What you did', t: 'textarea', rows: 5, hint: MD_HINT },
       { n: 'position', l: 'Sort order', t: 'number' },
     ],
   },
@@ -148,6 +182,7 @@ const ENTITIES = {
 }
 const rowsOf = e => all(`select * from ${e} order by ${ENTITIES[e].order}`)
 const rowById = (e, id) => get(`select * from ${e} where id = ?`, id)
+const PUBLISHED = 'select * from projects where published = 1 order by position asc, id desc'
 
 /* ---------- schema + seed ---------- */
 const init = async () => {
@@ -205,9 +240,42 @@ const upload = multer({
   fileFilter: (_r, file, cb) => cb(OK_TYPES.has(file.mimetype) ? null : new Error('Images only'), OK_TYPES.has(file.mimetype)),
 })
 
+/* ---------- security headers ----------
+   The public pages carry two inline scripts, allowed by their hashes, so nothing else
+   can run. The admin uses inline handlers (confirm dialogs), so it keeps 'unsafe-inline'
+   but sits behind the login. Images may come from any https URL because the admin
+   accepts pasted image links. */
+const SCRIPT_HASHES = Object.values(SCRIPT)
+  .map(js => `'sha256-${crypto.createHash('sha256').update(js).digest('base64')}'`).join(' ')
+const csp = admin => [
+  "default-src 'self'",
+  `script-src ${admin ? "'self' 'unsafe-inline'" : SCRIPT_HASHES}`,
+  "style-src 'self' 'unsafe-inline'",
+  `img-src 'self' https: data:${admin ? ' blob:' : ''}`,
+  "font-src 'self'",
+  "connect-src 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "object-src 'none'",
+].join('; ')
+const HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'X-Frame-Options': 'DENY',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+}
+
 const app = express()
 app.set('trust proxy', 1)   // real client IP + req.secure behind a proxy
 app.disable('x-powered-by')
+app.use((req, res, next) => {
+  res.set(HEADERS)
+  res.set('Content-Security-Policy', csp(req.path.startsWith('/admin')))
+  if (req.secure) res.set('Strict-Transport-Security', 'max-age=63072000')
+  next()
+})
 app.use(async (_req, _res, next) => { try { await boot() } catch (e) { return next(e) } next() })
 app.use(express.urlencoded({ extended: false, limit: '256kb' }))
 app.use('/public', express.static(path.join(root, 'public'), { maxAge: '365d', immutable: true }))
@@ -215,26 +283,25 @@ if (!BLOB) app.use('/uploads', express.static(path.join(DATA, 'uploads'), { maxA
 
 /* ---------- public site ---------- */
 app.get('/', async (req, res) => {
-  const raw = await getSettings()
-  const stats = await statsFor(raw)
-  const s = withStats(raw, stats)
+  const { s, stats } = await context()
+  const projects = await all(PUBLISHED)
   res.send(homePage({
-  s, stats,
-  projects: await all('select * from projects where published = 1 order by position asc, id desc'),
-  experience: await rowsOf('experience'),
-  skills: await rowsOf('skills'),
-  sent: 'sent' in req.query,
-}))
+    s, stats, projects,
+    // link preview: the configured image, else the first project that has one
+    image: s.og_image || s.avatar || projects.find(p => p.image)?.image || '',
+    experience: await rowsOf('experience'),
+    skills: await rowsOf('skills'),
+    sent: 'sent' in req.query,
+  }))
 })
 
 app.get('/work/:slug', async (req, res) => {
   const p = await get('select * from projects where slug = ? and published = 1', req.params.slug)
-  const raw = await getSettings()
-  if (!p) return res.status(404).send(notFound(raw))
-  const s = withStats(raw, await statsFor(raw))
+  if (!p) return res.status(404).send(notFound(await getSettings()))
+  const { s, stats } = await context()
   const list = await all('select slug, title from projects where published = 1 order by position asc, id desc')
   const i = list.findIndex(x => x.slug === p.slug)
-  res.send(projectPage({ s, p, stats: await statsFor(raw), next: list.length > 1 ? list[(i + 1) % list.length] : null }))
+  res.send(projectPage({ s, p, stats, next: list.length > 1 ? list[(i + 1) % list.length] : null }))
 })
 
 app.get('/robots.txt', (_req, res) => res.type('text/plain')
@@ -249,15 +316,8 @@ ${slugs.map(r => `  <url><loc>${SITE}/work/${r.slug}</loc><priority>0.8</priorit
 </urlset>`)
 })
 
-// in-memory, resets on restart
-const hits = new Map()
 app.post('/contact', async (req, res) => {
-  const ip = req.ip
-  const now = Date.now()
-  const recent = (hits.get(ip) || []).filter(t => now - t < 3600e3)
-  if (recent.length >= 5) return res.status(429).send('Too many messages. Try again later.')
-  hits.set(ip, [...recent, now])
-
+  if (await limited(`contact:${req.ip}`, 5, 3600e3)) return res.status(429).send('Too many messages. Try again later.')
   const name = String(req.body.name || '').trim().slice(0, 120)
   const email = String(req.body.email || '').trim().slice(0, 200)
   const body = String(req.body.body || '').trim().slice(0, 5000)
@@ -270,7 +330,11 @@ app.post('/contact', async (req, res) => {
 
 /* ---------- admin ---------- */
 app.get('/admin/login', (req, res) => authed(req) ? res.redirect('/admin') : res.send(loginPage({})))
-app.post('/admin/login', (req, res) => {
+app.post('/admin/login', async (req, res) => {
+  // one password on a public URL: cap attempts per address
+  if (await limited(`login:${req.ip}`, 10, 15 * 60e3)) {
+    return res.status(429).send(loginPage({ error: 'Too many attempts. Try again in 15 minutes.' }))
+  }
   const given = crypto.createHash('sha256').update(String(req.body.password || '')).digest()
   const want = crypto.createHash('sha256').update(PASSWORD).digest()
   if (!crypto.timingSafeEqual(given, want)) return res.status(401).send(loginPage({ error: 'Wrong password.' }))
@@ -400,12 +464,15 @@ app.post('/admin/:entity/:id?', async (req, res) => {
 })
 
 app.use(async (_req, res) => res.status(404).send(notFound(await getSettings())))
-app.use((err, _req, res, _next) => {
+app.use((err, req, res, _next) => {
   console.error(err)
-  res.status(400).send(`<p style="font:16px system-ui;padding:40px">${err.message}</p><p style="font:16px system-ui;padding:0 40px"><a href="javascript:history.back()">Go back</a></p>`)
+  const back = req.path.startsWith('/admin') ? '/admin' : '/'
+  res.status(400).send(`<p style="font:16px system-ui;padding:40px">${err.message}</p><p style="font:16px system-ui;padding:0 40px"><a href="${back}">Go back</a></p>`)
 })
 
-if (!process.env.VERCEL) {
+// Listen only when run directly (node server.js, node --watch server.js). Vercel and
+// the tests import the app instead.
+if (process.argv[1] && path.resolve(process.argv[1]) === here) {
   app.listen(PORT, () => console.log(`\n  site   http://localhost:${PORT}\n  admin  http://localhost:${PORT}/admin\n`))
 }
 

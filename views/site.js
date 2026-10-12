@@ -2,25 +2,12 @@ import { esc, md, list, fill, V } from '../lib.js'
 
 const abs = (s, u) => !u ? '' : /^https?:/.test(u) ? u : `${s.site}${u}`
 
-const layout = ({ s, title, body, cls = '', image = '' }) => `<!doctype html>
-<html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(title || s.seo_title || `${s.name}, ${s.role}`)}</title>
-<meta name="description" content="${esc(s.seo_description || s.tagline)}">
-<meta property="og:title" content="${esc(title || s.name)}">
-<meta property="og:description" content="${esc(s.seo_description || s.tagline)}">
-<meta property="og:type" content="website">
-${abs(s, image || s.og_image || s.avatar) ? `<meta property="og:image" content="${esc(abs(s, image || s.og_image || s.avatar))}">
-<meta name="twitter:card" content="summary_large_image">` : '<meta name="twitter:card" content="summary">'}
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>◗</text></svg>">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/public/site.css?v=${V.site}">
-<meta name="view-transition" content="same-origin">
-<script>document.documentElement.classList.add('js')</script>
-<style>:root{--accent:${esc(s.accent || '#b0451f')}}</style>
-</head><body class="${cls}"><a class="skip" href="#main">Skip to content</a>${body}
-<script>
+// The two inline scripts, exported so the server can allow exactly these by hash in the
+// Content-Security-Policy. Edit them here and the hash follows; nothing else inline runs.
+export const SCRIPT = {
+  // runs before first paint so the reveal styles only apply when JS is on
+  flag: "document.documentElement.classList.add('js')",
+  main: `
 (() => {
   const sel = '.intro > *:not(h1), .rows .row, .split > div, .exp article, h2.big, .cwrap > *, .case > *'
   const els = [...document.querySelectorAll(sel)]
@@ -65,7 +52,29 @@ ${abs(s, image || s.og_image || s.avatar) ? `<meta property="og:image" content="
   }), { threshold: 0.4 })
   nums.forEach(el => io2.observe(el))
 })()
-</script>
+`,
+}
+
+const layout = ({ s, title, body, cls = '', image = '' }) => `<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(title || s.seo_title || `${s.name}, ${s.role}`)}</title>
+<meta name="description" content="${esc(s.seo_description || s.tagline)}">
+<meta property="og:title" content="${esc(title || s.name)}">
+<meta property="og:description" content="${esc(s.seo_description || s.tagline)}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="${esc(s.name)}">
+${abs(s, image || s.og_image || s.avatar) ? `<meta property="og:image" content="${esc(abs(s, image || s.og_image || s.avatar))}">
+<meta name="twitter:card" content="summary_large_image">` : '<meta name="twitter:card" content="summary">'}
+<meta name="theme-color" content="#0a0a0a">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>◗</text></svg>">
+<link rel="preload" href="/public/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/public/site.css?v=${V.site}">
+<meta name="view-transition" content="same-origin">
+<script>${SCRIPT.flag}</script>
+<style>:root{--accent:${esc(s.accent || '#b0451f')}}</style>
+</head><body class="${cls}"><a class="skip" href="#main">Skip to content</a>${body}
+<script>${SCRIPT.main}</script>
 </body></html>`
 
 const header = s => `
@@ -102,13 +111,13 @@ const workRow = (p, st) => `
   </span>
 </a>`
 
-export const homePage = ({ s, projects, experience, skills, sent, stats = {} }) => layout({
-  s,
+export const homePage = ({ s, projects, experience, skills, sent, stats = {}, image = '' }) => layout({
+  s, image,
   body: `${header(s)}
 <main id="main">
 
 <section class="intro">
-  ${s.available === '1' ? '<p class="pill"><i class="dot"></i>Available for new work</p>' : ''}
+  ${s.available === '1' ? '<p class="pill"><i class="dot"></i>Open to new work</p>' : ''}
   <h1><span class="ln"><i>${esc(s.name)}</i></span><span class="ln"><i class="qi">${esc(s.role)}</i></span></h1>
   <p class="lede">${esc(s.tagline)}</p>
   <p class="meta">${s.location ? `<span>${esc(s.location)}</span>` : ''}<a href="mailto:${esc(s.email)}">${esc(s.email)}</a></p>
@@ -155,12 +164,12 @@ ${experience.length ? `<section class="block">
 <section id="contact" class="block contact">
   <h2 class="big">Let's build<br><span class="qi">something.</span></h2>
   <div class="cwrap">
-    <p class="lede">Tell me what you're working on. I read every message and reply within a day or two.</p>
-    ${sent ? '<p class="ok" role="status">Thanks, your message landed. I\'ll get back to you soon.</p>' : ''}
+    <p class="lede">Have a project, a role, or a hard problem worth talking about? Write me a line.</p>
+    ${sent ? '<p class="ok" role="status">Received. I\'ll be in touch.</p>' : ''}
     <form method="post" action="/contact" class="cform">
       <label>Name<input name="name" autocomplete="name" maxlength="120"></label>
       <label>Email<input name="email" type="email" required autocomplete="email" maxlength="200"></label>
-      <label class="full">Message<textarea name="body" rows="5" required maxlength="5000" placeholder="A sentence or two about the project, timeline, and budget range."></textarea></label>
+      <label class="full">Message<textarea name="body" rows="5" required maxlength="5000" placeholder="What are you building, and what's in the way?"></textarea></label>
       <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" class="hp">
       <button type="submit">Send message</button>
       <p class="or">or email <a href="mailto:${esc(s.email)}">${esc(s.email)}</a></p>
@@ -188,7 +197,7 @@ export const projectPage = ({ s, p, next, stats = {} }) => layout({
   ${p.image ? `<img class="hero" src="${esc(p.image)}" alt="${esc(p.title)}">` : ''}
   <div class="prose wide">${md(fill(p.description, stats))}</div>
   <p class="next">${next ? `<a href="/work/${esc(next.slug)}">Next: ${esc(next.title)} →</a>` : ''}
-    <a href="/#contact">Want something like this? Get in touch →</a></p>
+    <a href="/#contact">Building something like it? Get in touch →</a></p>
 </article>
 </main>${footer(s)}`,
 })
