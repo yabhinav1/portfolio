@@ -190,9 +190,10 @@ Back up `portfolio.db` and `uploads/` together; they're the whole site.
 Project text can embed `{{servers}}`, `{{users}}`, `{{users_k}}` and `{{ping}}`.
 They are filled at render from `annie.monster/api/status`, cached in the settings
 table and refreshed in the background once the stored copy is older than six
-hours, so no page load waits on the network. On Vercel the refresh is handed to
-the runtime's `waitUntil`, so it finishes after the response instead of being
-killed with the function. If the API is unreachable the last
+hours. The one request that finds the copy stale refreshes it inline with a short
+timeout, which works identically on a server and on serverless. The admin Settings
+page shows both feeds' last update or last error, so a wrong key or a blocked
+request is visible without reading logs. If the API is unreachable the last
 known values are used and the refresh backs off until the next window.
 
 ## GitHub activity

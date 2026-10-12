@@ -142,10 +142,21 @@ const SETTING_GROUPS = [
   ]],
 ]
 
-export const adminSettings = ({ s, counts, saved }) => shell({
+// "Live stats · 487 servers, 71,688 users · updated 12 min ago", or the last error.
+const ago = t => {
+  if (!t) return ''
+  const m = Math.round((Date.now() - t) / 60e3)
+  return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`
+}
+const feedLine = (label, f) => f.ok
+  ? `<p class="toast">${esc(label)} · ${esc(f.text)} · updated ${ago(f.at)}</p>`
+  : `<p class="ok bad" role="alert">${esc(label)} · ${esc(f.text)}${f.err ? ` · last attempt failed: ${esc(f.err)}` : ''}</p>`
+
+export const adminSettings = ({ s, counts, saved, feeds }) => shell({
   title: 'Settings', nav: 'settings', counts,
   body: `${head('Settings', 'Everything on the site that isn\'t a project')}
 ${saved ? '<p class="toast" role="status">Saved. <a href="/" target="_blank">View the site ↗</a></p>' : ''}
+${feeds ? feedLine('Live stats', feeds.stats) + feedLine('GitHub activity', feeds.github) : ''}
 <form method="post" action="/admin/settings" class="form">
   ${SETTING_GROUPS.map(([g, fields]) => `
     <section class="group"><h2>${esc(g)}</h2>

@@ -25,10 +25,6 @@ const BLOB = !!(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID |
 if (!BLOB) fs.mkdirSync(path.join(DATA, 'uploads'), { recursive: true })
 if (!process.env.ADMIN_PASSWORD) console.warn('⚠  ADMIN_PASSWORD not set, using "admin". Set it before deploying.')
 
-// On Vercel, work started after the response only finishes if the runtime is told
-// about it. Anywhere else this is a no-op and the promise simply runs.
-const waitUntil = p => globalThis[Symbol.for('@vercel/request-context')]?.get?.()?.waitUntil?.(p)
-
 /* ---------- db ---------- */
 if (process.env.VERCEL && !TURSO) {
   throw new Error('TURSO_DATABASE_URL is not set. Serverless has no writable disk, so the local SQLite file cannot be used. Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in the project environment variables.')
@@ -78,22 +74,24 @@ const limited = async (key, max, windowMs) => {
   return false
 }
 
-/* ---------- live stats, refreshed in the background ---------- */
+/* ---------- live stats ----------
+   Refreshed at most every STATS_TTL. A stale value is refreshed inline, in the request
+   that finds it stale, with a short timeout: that costs one visitor a few hundred
+   milliseconds every six hours, and it works the same on a server and on serverless,
+   where work left running after the response may never finish. */
 const STATS_URL = 'https://www.annie.monster/api/status'
 const STATS_TTL = 6 * 3600e3
 const STATS_RETRY = 15 * 60e3
-let refreshing = false
+let refreshing = null
 
-const refreshStats = async () => {
-  if (refreshing) return
-  refreshing = true
+const refreshStats = () => refreshing ||= (async () => {
   try {
     // Annie's status API sits behind a captcha gate. ANNIE_STATS_KEY is the shared key
     // (STATS_API_KEY on Annie's side) that lets a server read the public summary.
     const key = (process.env.ANNIE_STATS_KEY || '').trim()   // a pasted value often carries a newline
     const headers = key ? { 'x-annie-stats-key': key } : {}
-    const r = await fetch(STATS_URL, { headers, signal: AbortSignal.timeout(5000) })
-    if (!r.ok) throw new Error(`status ${r.status}`)
+    const r = await fetch(STATS_URL, { headers, signal: AbortSignal.timeout(4000) })
+    if (!r.ok) throw new Error(`status ${r.status} ${(await r.text()).slice(0, 80)}${key ? '' : ' (ANNIE_STATS_KEY is not set)'}`)
     const j = await r.json()
     if (typeof j.guilds !== 'number' || typeof j.users !== 'number') throw new Error('unexpected shape')
     await Promise.all([
@@ -101,16 +99,20 @@ const refreshStats = async () => {
       setSetting('stat_users', String(j.users)),
       setSetting('stat_ping', String(j.ping ?? '')),
       setSetting('stat_at', String(Date.now())),
+      setSetting('stat_err', ''),
     ])
   } catch (e) {
     console.warn('stats refresh failed:', e.message)
     // Back off, but only for STATS_RETRY, not a whole TTL: a fixed key or a recovered
-    // API should show up within minutes, not hours.
-    await setSetting('stat_at', String(Date.now() - STATS_TTL + STATS_RETRY))
+    // API should show up within minutes, not hours. The error is kept for the admin.
+    await Promise.all([
+      setSetting('stat_at', String(Date.now() - STATS_TTL + STATS_RETRY)),
+      setSetting('stat_err', `${new Date().toISOString()} ${e.message}`),
+    ])
   } finally {
-    refreshing = false
+    refreshing = null
   }
-}
+})()
 
 // Renders from the stored values so a page never waits on the network. If they are
 // stale the refresh runs after the response, and the next visitor sees the new ones.
@@ -131,10 +133,8 @@ const withStats = (s, st) => ({ ...s,
 
 const statsFor = async (s) => {
   if (Date.now() - Number(s.stat_at || 0) < STATS_TTL) return shape(s)
-  // Nothing stored yet (fresh deploy): wait, otherwise the page would print zeros.
-  if (!s.stat_servers) { await refreshStats(); return shape(await getSettings()) }
-  waitUntil(refreshStats())
-  return shape(s)
+  await refreshStats()
+  return shape(await getSettings())
 }
 
 // Settings plus stats, resolved once per request.
@@ -148,13 +148,11 @@ const context = async () => {
    The public calendar at github.com/users/<name>/contributions needs no token. The
    user comes from the GitHub link in settings, so there is nothing extra to configure. */
 const ghUser = s => (s.github || '').match(/github\.com\/([\w.-]+)/)?.[1] || ''
-let ghRefreshing = false
-const refreshGithub = async (user) => {
-  if (ghRefreshing) return
-  ghRefreshing = true
+let ghRefreshing = null
+const refreshGithub = (user) => ghRefreshing ||= (async () => {
   try {
     const r = await fetch(`https://github.com/users/${user}/contributions`,
-      { headers: { 'user-agent': 'Mozilla/5.0 (portfolio; +' + SITE + ')' }, signal: AbortSignal.timeout(8000) })
+      { headers: { 'user-agent': 'Mozilla/5.0 (portfolio; +' + SITE + ')' }, signal: AbortSignal.timeout(6000) })
     if (!r.ok) throw new Error(`status ${r.status}`)
     const { days, total } = parseContributions(await r.text())
     if (!days.length) throw new Error('no calendar in page')
@@ -163,24 +161,37 @@ const refreshGithub = async (user) => {
       setSetting('gh_total', String(total)),
       setSetting('gh_user', user),
       setSetting('gh_at', String(Date.now())),
+      setSetting('gh_err', ''),
     ])
   } catch (e) {
     console.warn('github refresh failed:', e.message)
-    await setSetting('gh_at', String(Date.now() - STATS_TTL + STATS_RETRY))
+    await Promise.all([
+      setSetting('gh_at', String(Date.now() - STATS_TTL + STATS_RETRY)),
+      setSetting('gh_err', `${new Date().toISOString()} ${e.message}`),
+    ])
   } finally {
-    ghRefreshing = false
+    ghRefreshing = null
   }
-}
+})()
 const githubFor = async (s) => {
   const user = ghUser(s)
   if (!user) return null
-  const stale = Date.now() - Number(s.gh_at || 0) >= STATS_TTL || s.gh_user !== user
-  if (stale && !s.gh_days) { await refreshGithub(user); s = await getSettings() }   // nothing stored yet: wait
-  else if (stale) waitUntil(refreshGithub(user))
+  if (Date.now() - Number(s.gh_at || 0) >= STATS_TTL || s.gh_user !== user) {
+    await refreshGithub(user)
+    s = await getSettings()
+  }
   if (!s.gh_days || s.gh_user !== user) return null
   const days = JSON.parse(s.gh_days).map(([d, n, l]) => ({ d, n, l }))
   return { user, days, total: Number(s.gh_total || 0), ...streaks(days) }
 }
+
+// What the admin sees about the two feeds: last update, or the last error.
+const feedStatus = s => ({
+  stats: { ok: !!s.stat_servers && !s.stat_err, at: Number(s.stat_at || 0), err: s.stat_err || '',
+    text: s.stat_servers ? `${shape(s).servers} servers, ${shape(s).users} users` : 'nothing fetched yet' },
+  github: { ok: !!s.gh_days && !s.gh_err, at: Number(s.gh_at || 0), err: s.gh_err || '',
+    text: s.gh_days ? `${Number(s.gh_total || 0).toLocaleString('en-US')} contributions for @${s.gh_user}` : (ghUser(s) ? 'nothing fetched yet' : 'no GitHub link set') },
+})
 
 /* ---------- entities: one spec drives list, form, save, delete ---------- */
 const MD_HINT = 'Blank line = new paragraph. **bold**, *italic*, `code`, [text](url), ## headings, - lists, ```code blocks``` and ![caption](image-url) on its own line all work.'
@@ -412,8 +423,10 @@ app.post('/admin/upload', upload.single('file'), async (req, res) => {
   res.json({ url })
 })
 
-app.get('/admin/settings', async (req, res) =>
-  res.send(adminSettings({ s: await getSettings(), counts: await counts(), saved: 'saved' in req.query })))
+app.get('/admin/settings', async (req, res) => {
+  const s = await getSettings()
+  res.send(adminSettings({ s, counts: await counts(), saved: 'saved' in req.query, feeds: feedStatus(s) }))
+})
 const BOOL_SETTINGS = new Set(['available'])
 app.post('/admin/settings', async (req, res) => {
   for (const k of Object.keys(DEFAULTS)) {
