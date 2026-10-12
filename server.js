@@ -90,7 +90,8 @@ const refreshStats = async () => {
   try {
     // Annie's status API sits behind a captcha gate. ANNIE_STATS_KEY is the shared key
     // (STATS_API_KEY on Annie's side) that lets a server read the public summary.
-    const headers = process.env.ANNIE_STATS_KEY ? { 'x-annie-stats-key': process.env.ANNIE_STATS_KEY } : {}
+    const key = (process.env.ANNIE_STATS_KEY || '').trim()   // a pasted value often carries a newline
+    const headers = key ? { 'x-annie-stats-key': key } : {}
     const r = await fetch(STATS_URL, { headers, signal: AbortSignal.timeout(5000) })
     if (!r.ok) throw new Error(`status ${r.status}`)
     const j = await r.json()
