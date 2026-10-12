@@ -79,15 +79,19 @@ const limited = async (key, max, windowMs) => {
 }
 
 /* ---------- live stats, refreshed in the background ---------- */
-const STATS_URL = 'https://annie.monster/api/status'
+const STATS_URL = 'https://www.annie.monster/api/status'
 const STATS_TTL = 6 * 3600e3
+const STATS_RETRY = 15 * 60e3
 let refreshing = false
 
 const refreshStats = async () => {
   if (refreshing) return
   refreshing = true
   try {
-    const r = await fetch(STATS_URL, { signal: AbortSignal.timeout(5000) })
+    // Annie's status API sits behind a captcha gate. ANNIE_STATS_KEY is the shared key
+    // (STATS_API_KEY on Annie's side) that lets a server read the public summary.
+    const headers = process.env.ANNIE_STATS_KEY ? { 'x-annie-stats-key': process.env.ANNIE_STATS_KEY } : {}
+    const r = await fetch(STATS_URL, { headers, signal: AbortSignal.timeout(5000) })
     if (!r.ok) throw new Error(`status ${r.status}`)
     const j = await r.json()
     if (typeof j.guilds !== 'number' || typeof j.users !== 'number') throw new Error('unexpected shape')
@@ -99,7 +103,9 @@ const refreshStats = async () => {
     ])
   } catch (e) {
     console.warn('stats refresh failed:', e.message)
-    await setSetting('stat_at', String(Date.now()))   // back off instead of retrying every request
+    // Back off, but only for STATS_RETRY, not a whole TTL: a fixed key or a recovered
+    // API should show up within minutes, not hours.
+    await setSetting('stat_at', String(Date.now() - STATS_TTL + STATS_RETRY))
   } finally {
     refreshing = false
   }

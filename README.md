@@ -48,6 +48,7 @@ npm start
 | `PORT`           | `3000`             |                                                     |
 | `SITE_URL`       | `http://localhost` | Absolute origin. Used by the sitemap and link previews. |
 | `DATA_DIR`       | project folder     | Where `portfolio.db` and `uploads/` live. Set to the volume mount in production. |
+| `ANNIE_STATS_KEY` | unset             | Shared key for Annie's status API (its `STATS_API_KEY`). Without it the live stats stay at the last cached values. |
 
 ## What the admin does
 
