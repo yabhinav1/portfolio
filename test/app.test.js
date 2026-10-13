@@ -177,3 +177,56 @@ test('visits from LinkedIn are counted per post, crawlers and other sources are 
   assert.equal(s.days[today], 3)
   assert.deepEqual(s.refs, { 'li-2026-10-13-glibc-arena-leak': 2 })
 })
+
+test('notes: hidden until one exists, then listed, linked and in the sitemap', async () => {
+  assert.doesNotMatch(await (await get('/')).text(), /href="\/notes"/)
+  const cookie = await login()
+  const r = await post('/admin/notes', {
+    title: 'A glibc arena leak', body: 'Memory kept **growing**.', published_at: '2026-10-13',
+    linkedin_url: 'https://www.linkedin.com/feed/update/urn:li:share:1/', published: 'on',
+  }, { cookie })
+  assert.equal(r.status, 302)
+  const home = await (await get('/')).text()
+  assert.match(home, /href="\/notes"/)
+  assert.match(home, /A glibc arena leak/)
+  assert.match(await (await get('/notes')).text(), /A glibc arena leak/)
+  const page = await (await get('/notes/a-glibc-arena-leak')).text()
+  assert.match(page, /<strong>growing<\/strong>/)
+  assert.match(page, /linkedin\.com\/feed\/update/)
+  assert.equal((await get('/notes/nope')).status, 404)
+  assert.match(await (await get('/sitemap.xml')).text(), /\/notes\/a-glibc-arena-leak/)
+})
+
+test('résumé renders from the site content, with a print button and allowed script', async () => {
+  const r = await get('/resume')
+  assert.equal(r.status, 200)
+  const html = await r.text()
+  assert.match(html, /class="cv"/)
+  assert.match(html, /data-print/)
+  assert.match(html, /Nimbus Analytics/)
+  const csp = r.headers.get('content-security-policy')
+  for (const m of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) {
+    const h = createHash('sha256').update(m[1]).digest('base64')
+    assert.ok(csp.includes(`'sha256-${h}'`))
+  }
+})
+
+test('command palette data lists sections and projects as JSON', async () => {
+  const html = await (await get('/')).text()
+  const m = html.match(/<script type="application\/json" id="pal">([\s\S]*?)<\/script>/)
+  assert.ok(m, 'palette data is embedded')
+  const items = JSON.parse(m[1])
+  assert.ok(items.some(x => x.h === '/work/nimbus-analytics'))
+  assert.ok(items.some(x => x.a === 'copy') && items.some(x => x.a === 'theme'))
+})
+
+test('content export needs a login and returns every table', async () => {
+  assert.equal((await get('/admin/export.json')).status, 302)
+  const r = await get('/admin/export.json', { cookie: await login() })
+  assert.equal(r.status, 200)
+  const j = await r.json()
+  for (const t of ['settings', 'projects', 'experience', 'skills', 'notes', 'messages', 'referrals'])
+    assert.ok(Array.isArray(j.tables[t]), t)
+  assert.ok(j.exported_at)
+  assert.ok(!j.tables.settings.some(x => /password|secret/i.test(x.key)), 'no secrets in the export')
+})

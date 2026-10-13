@@ -12,8 +12,64 @@ export const SCRIPT = {
   // visitor chose earlier is applied before anything renders, so there is no flash
   flag: "document.documentElement.classList.add('js');try{var t=localStorage.getItem('theme');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t}catch(e){}",
   main: `
+// Command palette (Ctrl/Cmd+K or /) and the résumé's print button. Runs on every page.
 (() => {
-  const sel = '.intro > *:not(h1), .rows .row, .split > div, .exp article, .gh > *, h2.big, .cwrap > *, .case > *'
+  document.querySelector('[data-print]')?.addEventListener('click', () => print())
+  const box = document.querySelector('.cmdk'), data = document.getElementById('pal')
+  if (!box || !data) return
+  let items = []
+  try { items = JSON.parse(data.textContent) } catch (e) { return }
+  const input = box.querySelector('input'), ul = box.querySelector('ul')
+  let shown = [], at = 0, lastFocus = null
+  const icon = { page: '↗', project: '◗', action: '⌘', link: '↗' }
+  const render = () => {
+    const q = input.value.trim().toLowerCase()
+    shown = items.filter(i => !q || (i.t + ' ' + (i.sub || '')).toLowerCase().includes(q)).slice(0, 12)
+    at = Math.min(at, Math.max(0, shown.length - 1))
+    ul.innerHTML = ''
+    shown.forEach((it, i) => {
+      const li = document.createElement('li')
+      li.setAttribute('role', 'option'); li.setAttribute('aria-selected', String(i === at))
+      li.className = i === at ? 'on' : ''
+      const ic = document.createElement('i'); ic.textContent = icon[it.k] || '·'
+      const t = document.createElement('b'); t.textContent = it.t
+      li.append(ic, t)
+      if (it.sub) { const s = document.createElement('span'); s.textContent = it.sub; li.append(s) }
+      const k = document.createElement('small'); k.textContent = it.k; li.append(k)
+      li.addEventListener('mousemove', () => { if (at !== i) { at = i; render() } })
+      li.addEventListener('click', () => run(it))
+      ul.append(li)
+    })
+    if (!shown.length) { const li = document.createElement('li'); li.className = 'none'; li.textContent = 'Nothing matches.'; ul.append(li) }
+  }
+  const open = () => { lastFocus = document.activeElement; box.hidden = false; input.value = ''; at = 0; render(); requestAnimationFrame(() => input.focus()) }
+  const close = () => { box.hidden = true; lastFocus?.focus?.() }
+  const run = it => {
+    close()
+    if (it.a === 'copy') { navigator.clipboard?.writeText(it.v).then(() => toast('Email copied')); return }
+    if (it.a === 'theme') { document.querySelector('.theme')?.click(); return }
+    if (it.ext) window.open(it.h, '_blank', 'noopener'); else location.href = it.h
+  }
+  const toast = msg => {
+    const t = document.createElement('div'); t.className = 'toast-mini'; t.textContent = msg
+    document.body.append(t); setTimeout(() => t.remove(), 1600)
+  }
+  document.querySelectorAll('[data-cmdk]').forEach(b => b.addEventListener('click', open))
+  addEventListener('keydown', e => {
+    const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '') && document.activeElement !== input
+    if ((e.key === 'k' && (e.metaKey || e.ctrlKey)) || (e.key === '/' && !typing && box.hidden)) { e.preventDefault(); box.hidden ? open() : close(); return }
+    if (box.hidden) return
+    if (e.key === 'Escape') { e.preventDefault(); close() }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); at = (at + 1) % Math.max(1, shown.length); render() }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); at = (at - 1 + shown.length) % Math.max(1, shown.length); render() }
+    else if (e.key === 'Enter' && shown[at]) { e.preventDefault(); run(shown[at]) }
+  })
+  input.addEventListener('input', () => { at = 0; render() })
+  box.addEventListener('click', e => { if (e.target === box) close() })
+})();
+
+(() => {
+  const sel = '.intro > *:not(h1), .rows .row, .split > div, .exp article, .gh > *, .notes > *, h2.big, .cwrap > *, .case > *'
   const els = [...document.querySelectorAll(sel)]
   if (!els.length || !('IntersectionObserver' in window)) return
   const io = new IntersectionObserver((es) => es.forEach(e => {
@@ -129,7 +185,22 @@ export const SCRIPT = {
 `,
 }
 
-const layout = ({ s, title, body, cls = '', image = '' }) => `<!doctype html>
+// The command palette's entries, as a JSON data block the page script reads.
+// A JSON block is never executed, so it does not need a CSP hash.
+const palette = (s, projects = []) => JSON.stringify([
+  { t: 'Home', h: '/', k: 'page' },
+  { t: 'Work', h: '/#work', k: 'page' },
+  { t: 'About', h: '/#about', k: 'page' },
+  ...(s.has_notes ? [{ t: 'Notes', h: '/notes', k: 'page' }] : []),
+  { t: 'Résumé', h: s.resume || '/resume', k: 'page' },
+  { t: 'Get in touch', h: '/#contact', k: 'page' },
+  ...projects.map(p => ({ t: p.title, sub: fill(p.summary || '', s).slice(0, 80), h: `/work/${p.slug}`, k: 'project' })),
+  { t: 'Copy email address', a: 'copy', v: s.email, k: 'action' },
+  { t: 'Switch light / dark', a: 'theme', k: 'action' },
+  ...[['GitHub', s.github], ['LinkedIn', s.linkedin]].filter(([, u]) => u).map(([t, u]) => ({ t, h: u, k: 'link', ext: 1 })),
+]).replace(/</g, '\\u003c')
+
+const layout = ({ s, title, body, cls = '', image = '', projects = [] }) => `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title || s.seo_title || `${s.name}, ${s.role}`)}</title>
@@ -149,6 +220,10 @@ ${abs(s, image || s.og_image || s.avatar) ? `<meta property="og:image" content="
 <script>${SCRIPT.flag}</script>
 <style>:root{--accent:${esc(s.accent || '#b0451f')}}</style>
 </head><body class="${cls}"><a class="skip" href="#main">Skip to content</a>${body}
+<div class="cmdk" hidden role="dialog" aria-modal="true" aria-label="Jump to">
+  <div class="cmdk-box"><input type="text" placeholder="Jump to a project, page or action…" aria-label="Search" autocomplete="off" spellcheck="false">
+  <ul role="listbox"></ul><p class="cmdk-foot"><span>↑↓ to move · ↵ to open · esc to close</span></p></div></div>
+<script type="application/json" id="pal">${palette(s, projects)}</script>
 <script>${SCRIPT.main}</script>
 </body></html>`
 
@@ -158,7 +233,9 @@ const header = s => `
   <nav>
     <a href="/#work">Work</a>
     <a href="/#about">About</a>
-    ${s.resume ? `<a href="${esc(s.resume)}" target="_blank" rel="noopener">Résumé</a>` : ''}
+    ${s.has_notes ? '<a href="/notes">Notes</a>' : ''}
+    ${s.resume ? `<a href="${esc(s.resume)}" target="_blank" rel="noopener">Résumé</a>` : '<a href="/resume">Résumé</a>'}
+    <button class="kbd" type="button" data-cmdk aria-label="Open the command palette" title="Jump to (Ctrl K)">⌘K</button>
     <button class="theme" type="button" aria-label="Switch between light and dark" title="Light / dark"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
     <a class="ghost" href="/#contact">Get in touch</a>
   </nav>
@@ -179,10 +256,20 @@ const footer = s => {
 </footer>`
 }
 
-const workRow = (p, st) => `
+// "● up · 120 ms" next to a project title, from the cached status check.
+const livePill = st => !st ? '' : st.up
+  ? `<span class="live-pill up" title="Checked in the last 10 minutes">${st.ms != null ? `up · ${n(st.ms)} ms${st.label ? ` ${esc(st.label)}` : ''}` : 'up'}</span>`
+  : '<span class="live-pill down" title="Did not answer the last check">down</span>'
+
+const timeAgo = iso => {
+  const m = Math.round((Date.now() - new Date(iso)) / 60e3)
+  return m < 2 ? 'just now' : m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} hours ago` : `${Math.round(m / 1440)} days ago`
+}
+
+const workRow = (p, st, live) => `
 <a class="row" href="/work/${esc(p.slug)}"${p.image ? ` data-cover="${esc(p.image)}"` : ''}>
   <span class="row-t">
-    <b>${esc(p.title)}</b>
+    <b>${esc(p.title)}${livePill(live?.[p.slug])}</b>
     ${p.summary ? `<em>${esc(fill(p.summary, st))}</em>` : ''}
     ${p.tags ? `<span class="tags">${list(p.tags).map(t => `<i>${esc(t)}</i>`).join('')}</span>` : ''}
   </span>
@@ -235,8 +322,8 @@ const githubSection = (g, s) => {
 </section>`
 }
 
-export const homePage = ({ s, projects, experience, skills, sent, stats = {}, image = '', github = null }) => layout({
-  s, image,
+export const homePage = ({ s, projects, experience, skills, sent, stats = {}, image = '', github = null, live = {}, shipped = null, notes = [] }) => layout({
+  s, image, projects,
   body: `${header(s)}
 <main id="main">
 
@@ -246,6 +333,7 @@ export const homePage = ({ s, projects, experience, skills, sent, stats = {}, im
   <p class="lede">${esc(s.tagline)}</p>
   <p class="meta">${s.location ? `<span>${esc(s.location)}</span>` : ''}<a href="mailto:${esc(s.email)}">${esc(s.email)}</a></p>
   ${(s.now || '').trim() ? `<p class="now"><b>Now</b><span>${esc(s.now)}</span></p>` : ''}
+  ${shipped ? `<p class="shipped"><span class="sdot"></span>Last shipped <a href="${esc(shipped.url || '#')}" target="_blank" rel="noopener">${esc(shipped.msg)}</a> to <b>${esc(shipped.repo)}</b> · ${esc(timeAgo(shipped.at))}</p>` : ''}
   ${stats.raw_servers ? `<p class="live">
     <span><b data-to="${stats.raw_servers}">${esc(stats.servers)}</b> servers running Annie</span>
     <span><b data-to="${stats.raw_users}">${esc(stats.users)}</b> users reached</span>
@@ -256,9 +344,14 @@ export const homePage = ({ s, projects, experience, skills, sent, stats = {}, im
 <section id="work" class="block">
   <h2 class="kick"><span>Selected work</span><b>${projects.length}</b></h2>
   ${projects.length
-      ? `<div class="rows">${projects.map(p => workRow(p, stats)).join('')}</div>`
+      ? `<div class="rows">${projects.map(p => workRow(p, stats, live)).join('')}</div>`
       : `<p class="empty">No projects yet. Add the first one in <a href="/admin/projects/new">the admin panel</a>.</p>`}
 </section>
+${notes.length ? `<section class="block">
+  <h2 class="kick"><span>Notes</span><b>${notes.length}</b></h2>
+  <div class="notes">${notes.slice(0, 3).map(noteRow).join('')}</div>
+  ${notes.length > 3 ? '<p class="more"><a href="/notes">All notes →</a></p>' : ''}
+</section>` : ''}
 
 ${(s.about || '').trim() || skills.length ? `<section id="about" class="block split">
   <div>
@@ -305,8 +398,8 @@ ${githubSection(github, s)}
 </main>${footer(s)}`,
 })
 
-export const projectPage = ({ s, p, next, stats = {} }) => layout({
-  s, title: `${p.title}, ${s.name}`, cls: 'sub', image: p.image,
+export const projectPage = ({ s, p, next, stats = {}, all = [] }) => layout({
+  s, title: `${p.title}, ${s.name}`, cls: 'sub', image: p.image, projects: all,
   body: `${header(s)}
 <main id="main">
 <article class="case">
@@ -326,6 +419,80 @@ export const projectPage = ({ s, p, next, stats = {} }) => layout({
 </article>
 </main>${footer(s)}`,
 })
+
+/* ---------- Notes: the LinkedIn posts, on this domain ---------- */
+const fmtLong = d => d ? new Date(d.length === 10 ? d + 'T00:00:00Z' : d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : ''
+// First lines of the body, without markdown, skipping a first line that just repeats the title.
+const excerpt = (body, title = '') => {
+  let t = String(body || '').replace(/\]\([^)]*\)/g, ']').replace(/[#*`>[\]!_]/g, '').split('\n').map(l => l.trim()).filter(Boolean)
+  const head = String(title).toLowerCase().slice(0, 30)
+  if (t[0] && head && t[0].toLowerCase().startsWith(head)) t = t.slice(1)
+  const x = t.join(' ')
+  return x.length > 170 ? x.slice(0, 170).replace(/\s+\S*$/, '') + '…' : x
+}
+const noteRow = nt => `
+<a class="note-row" href="/notes/${esc(nt.slug)}">
+  <span class="nd">${esc(fmtLong(nt.published_at))}</span>
+  <span class="nt"><b>${esc(nt.title)}</b>${excerpt(nt.body, nt.title) ? `<em>${esc(excerpt(nt.body, nt.title))}</em>` : ''}</span>
+  <span class="arw" aria-hidden="true">→</span>
+</a>`
+
+export const notesPage = ({ s, notes, projects = [] }) => layout({
+  s, title: `Notes, ${s.name}`, cls: 'sub', projects,
+  body: `${header(s)}<main id="main">
+<section class="intro">
+  <h1><span class="ln"><i>Notes</i></span><span class="ln"><i class="qi">from the work.</i></span></h1>
+  <p class="lede">Short write-ups of what broke, what fixed it, and what I would do differently. Most also went out on LinkedIn.</p>
+</section>
+<section class="block">
+  <h2 class="kick"><span>All notes</span><b>${notes.length}</b></h2>
+  ${notes.length ? `<div class="notes">${notes.map(noteRow).join('')}</div>` : '<p class="empty">Nothing here yet.</p>'}
+</section></main>${footer(s)}`,
+})
+
+export const notePage = ({ s, note, next, prev, projects = [] }) => layout({
+  s, title: `${note.title}, ${s.name}`, cls: 'sub', image: note.image, projects,
+  body: `${header(s)}<main id="main">
+<article class="case note">
+  <a class="back" href="/notes">← All notes</a>
+  <p class="kick"><span>${esc(fmtLong(note.published_at))}</span></p>
+  <h1>${esc(note.title)}</h1>
+  ${note.image ? `<img class="hero" src="${esc(note.image)}" alt="">` : ''}
+  <div class="prose wide">${md(note.body.split('\n').slice(note.body.startsWith(note.title) ? 1 : 0).join('\n'))}</div>
+  <p class="next">${note.linkedin_url ? `<a href="${esc(note.linkedin_url)}" target="_blank" rel="noopener">Discuss on LinkedIn →</a>` : ''}
+    ${prev ? `<a href="/notes/${esc(prev.slug)}">Newer: ${esc(prev.title)} →</a>` : ''}
+    ${next ? `<a href="/notes/${esc(next.slug)}">Older: ${esc(next.title)} →</a>` : ''}</p>
+</article></main>${footer(s)}`,
+})
+
+/* ---------- Résumé: one printable page, built from the site's own content ---------- */
+export const resumePage = ({ s, stats = {}, projects, experience, skills }) => {
+  const host = s.site.replace(/^https?:\/\//, '')
+  const links = [[host, s.site], ['github', s.github], ['linkedin', s.linkedin]].filter(([, u]) => u)
+    .map(([l, u]) => `<a href="${esc(u)}">${esc(l === host ? host : u.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''))}</a>`)
+  const summary = fill((s.headline || '').trim() || s.tagline, stats)
+  const edu = String(s.education || '').split('\n').map(l => l.trim()).filter(Boolean)
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(s.name)}, résumé</title><meta name="description" content="${esc(summary)}">
+<link rel="preload" href="/public/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/public/site.css?v=${V.site}">
+<script>${SCRIPT.flag}</script></head><body class="cv-body">
+<div class="cv-bar"><a href="/">← ${esc(s.name)}</a><span><a href="/public/resume.pdf" download>Download PDF</a><button type="button" data-print>Print</button></span></div>
+<main class="cv">
+  <header class="cv-head"><h1>${esc(s.name)}</h1><p class="cv-role">${esc(s.role)}${s.location ? ` · ${esc(s.location)}` : ''}</p>
+    <p class="cv-links"><a href="mailto:${esc(s.email)}">${esc(s.email)}</a>${links.join('')}</p></header>
+  <p class="cv-sum">${esc(summary)}</p>
+  ${experience.length ? `<section><h2>Experience</h2>${experience.map(e => `<div class="cv-item">
+    <div class="cv-line"><b>${esc(e.role)}${e.company ? `, ${esc(e.company)}` : ''}</b><span>${esc(e.period || '')}</span></div>
+    ${e.description ? `<div class="cv-text">${md(fill(e.description, stats))}</div>` : ''}</div>`).join('')}</section>` : ''}
+  ${projects.length ? `<section><h2>Projects</h2>${projects.map(p => `<div class="cv-item">
+    <div class="cv-line"><b>${esc(p.title)}</b><span>${esc(p.year || '')}</span></div>
+    <div class="cv-text">${esc(fill(p.summary || '', stats))}${p.tags ? `<span class="cv-tags">${list(p.tags).map(esc).join(' · ')}</span>` : ''}</div>
+    ${p.link || p.repo ? `<div class="cv-sub">${[p.link, p.repo].filter(Boolean).map(u => `<a href="${esc(u)}">${esc(u.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''))}</a>`).join(' · ')}</div>` : ''}</div>`).join('')}</section>` : ''}
+  ${skills.length ? `<section><h2>Skills</h2>${skills.map(g => `<div class="cv-skill"><b>${esc(g.label)}</b><span>${list(g.items).map(esc).join(', ')}</span></div>`).join('')}</section>` : ''}
+  ${edu.length ? `<section><h2>Education</h2>${edu.map(l => `<div class="cv-item"><div class="cv-line"><b>${esc(l)}</b></div></div>`).join('')}</section>` : ''}
+</main><script>${SCRIPT.main}</script></body></html>`
+}
 
 // A dead end that offers the work instead: the project list doubles as the menu.
 export const notFound = (s, projects = [], stats = {}) => layout({

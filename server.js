@@ -8,7 +8,7 @@ import { createClient } from '@libsql/client'
 import { put } from '@vercel/blob'
 import { esc, slugify, fill, SCHEMA, parseContributions, streaks } from './lib.js'
 import { notifyNew, sendMail } from './notify.js'
-import { homePage, projectPage, notFound, SCRIPT } from './views/site.js'
+import { homePage, projectPage, notFound, notesPage, notePage, resumePage, SCRIPT } from './views/site.js'
 import { adminList, adminForm, adminSettings, adminInbox, loginPage } from './views/admin.js'
 
 const here = fileURLToPath(import.meta.url)
@@ -46,6 +46,7 @@ const DEFAULTS = {
   email: 'you@example.com', avatar: '', resume: '', available: '1',
   github: '', linkedin: '', twitter: '', source: '', accent: '#b0451f',
   seo_title: '', seo_description: '', og_image: '',
+  education: '', headline: '',
 }
 // Local /uploads/ paths stop existing once uploads live in Blob storage, so a stale
 // value would mean a broken link preview or avatar. Treat it as unset instead.
@@ -139,9 +140,9 @@ const statsFor = async (s) => {
 
 // Settings plus stats, resolved once per request.
 const context = async () => {
-  const raw = await getSettings()
+  const [raw, note] = await Promise.all([getSettings(), get('select 1 as x from notes where published = 1 limit 1')])
   const stats = await statsFor(raw)
-  return { s: withStats(raw, stats), stats }
+  return { s: { ...withStats(raw, stats), has_notes: !!note }, stats }
 }
 
 /* ---------- GitHub activity, same cache pattern as the stats ----------
@@ -183,6 +184,64 @@ const githubFor = async (s) => {
   if (!s.gh_days || s.gh_user !== user) return null
   const days = JSON.parse(s.gh_days).map(([d, n, l]) => ({ d, n, l }))
   return { user, days, total: Number(s.gh_total || 0), ...streaks(days) }
+}
+
+/* ---------- live status of each project's site, cached for 10 minutes ----------
+   One request per live URL, in parallel, with a short timeout; the visitor who finds
+   the cache stale pays for it. Annie reports its own gateway ping, so that is used
+   when the stats are fresh. */
+const LIVE_TTL = 10 * 60e3
+let liveRefreshing = null
+const refreshLive = (projects) => liveRefreshing ||= (async () => {
+  try {
+    const out = {}
+    await Promise.all(projects.filter(p => /^https?:\/\//.test(p.link || '')).map(async p => {
+      const t = Date.now()
+      try {
+        const r = await fetch(p.link, { method: 'GET', redirect: 'follow', signal: AbortSignal.timeout(4000),
+          headers: { 'user-agent': 'Mozilla/5.0 (portfolio status check; +' + SITE + ')' } })
+        out[p.slug] = { up: r.status < 500, ms: Date.now() - t, code: r.status }
+      } catch { out[p.slug] = { up: false, ms: null } }
+    }))
+    await Promise.all([setSetting('live_status', JSON.stringify(out)), setSetting('live_at', String(Date.now()))])
+  } finally { liveRefreshing = null }
+})()
+const liveFor = async (s, projects) => {
+  if (Date.now() - Number(s.live_at || 0) >= LIVE_TTL) { await refreshLive(projects); s = await getSettings() }
+  let st = {}
+  try { st = JSON.parse(s.live_status || '{}') } catch {}
+  // Annie's own gateway latency is the honest number for a bot
+  const annie = projects.find(p => /annie/i.test(p.slug))
+  if (annie && st[annie.slug]?.up && s.stat_ping && Date.now() - Number(s.stat_at || 0) < STATS_TTL) st[annie.slug] = { ...st[annie.slug], ms: Number(s.stat_ping), label: 'gateway' }
+  return st
+}
+
+/* ---------- "last shipped": the newest push on GitHub, cached for an hour ---------- */
+const SHIP_TTL = 3600e3
+const shippedFor = async (s) => {
+  const user = ghUser(s)
+  if (!user) return null
+  if (Date.now() - Number(s.ship_at || 0) >= SHIP_TTL) {
+    // GitHub's events no longer carry commit messages, so: the most recently pushed
+    // public repo, then its newest commit that is not housekeeping.
+    const gh = path => fetch(`https://api.github.com${path}`, {
+      headers: { 'user-agent': 'portfolio', accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(4000) })
+    try {
+      const rr = await gh(`/users/${user}/repos?sort=pushed&per_page=6`)
+      if (!rr.ok) throw new Error(`repos ${rr.status}`)
+      const repo = (await rr.json()).find(r => !r.fork && !r.archived && r.name !== user)
+      if (repo) {
+        const cr = await gh(`/repos/${user}/${repo.name}/commits?per_page=10`)
+        if (!cr.ok) throw new Error(`commits ${cr.status}`)
+        const c = (await cr.json()).find(c => !/^(Merge|Record |Stats:|Harvest|Topic:|Redeploy)/.test(c.commit.message))
+        if (c) await setSetting('ship', JSON.stringify({ repo: repo.name, url: c.html_url,
+          msg: c.commit.message.split('\n')[0].slice(0, 90), at: c.commit.author.date }))
+      }
+    } catch (e) { console.warn('last shipped failed:', e.message) }
+    await setSetting('ship_at', String(Date.now()))
+    s = await getSettings()
+  }
+  try { return JSON.parse(s.ship || 'null') } catch { return null }
 }
 
 // What the admin sees about the two feeds: last update, or the last error.
@@ -233,6 +292,21 @@ const ENTITIES = {
       { n: 'label', l: 'Group name', t: 'text', req: true, hint: 'Frontend, Backend, Infra…' },
       { n: 'items', l: 'Items', t: 'text', hint: 'Comma separated' },
       { n: 'position', l: 'Sort order', t: 'number' },
+    ],
+  },
+  // Short write-ups, mostly the LinkedIn posts: the queue adds each one here when it
+  // publishes, so the writing also lives on this domain.
+  notes: {
+    label: 'Notes', singular: 'Note', order: 'published_at desc, id desc',
+    cols: [['title', 'Title'], ['published_at', 'Date'], ['published', 'Live']],
+    fields: [
+      { n: 'title', l: 'Title', t: 'text', req: true, hint: 'Usually the post\'s first line.' },
+      { n: 'body', l: 'Text', t: 'textarea', rows: 16, hint: MD_HINT },
+      { n: 'image', l: 'Image', t: 'image' },
+      { n: 'linkedin_url', l: 'LinkedIn post URL', t: 'text', hint: 'Shown as “Discuss on LinkedIn”. Blank hides it.' },
+      { n: 'published_at', l: 'Date', t: 'text', hint: 'YYYY-MM-DD. Newest shows first.' },
+      { n: 'slug', l: 'URL slug', t: 'text', hint: 'Leave blank to generate from the title.' },
+      { n: 'published', l: 'Published', t: 'bool', def: 1 },
     ],
   },
 }
@@ -369,18 +443,39 @@ app.get('/stats/linkedin.json', async (_req, res) => {
 })
 
 /* ---------- public site ---------- */
+const NOTES = "select * from notes where published = 1 order by published_at desc, id desc"
+
 app.get('/', async (req, res) => {
   const { s, stats } = await context()
   const projects = await all(PUBLISHED)
+  const [experience, skills, github, live, shipped, notes] = await Promise.all([
+    rowsOf('experience'), rowsOf('skills'), githubFor(s), liveFor(s, projects), shippedFor(s), all(NOTES)])
   res.send(homePage({
-    s, stats, projects,
+    s, stats, projects, experience, skills, github, live, shipped, notes,
     // link preview: the configured image, else the first project that has one
     image: s.og_image || s.avatar || projects.find(p => p.image)?.image || '',
-    experience: await rowsOf('experience'),
-    skills: await rowsOf('skills'),
-    github: await githubFor(s),
     sent: 'sent' in req.query,
   }))
+})
+
+app.get('/notes', async (_req, res) => {
+  const { s } = await context()
+  res.send(notesPage({ s, notes: await all(NOTES), projects: await all(PUBLISHED) }))
+})
+app.get('/notes/:slug', async (req, res) => {
+  const note = await get('select * from notes where slug = ? and published = 1', req.params.slug)
+  const { s, stats } = await context()
+  if (!note) return res.status(404).send(notFound(s, await all(PUBLISHED), stats))
+  const list = await all(NOTES)
+  const i = list.findIndex(x => x.slug === note.slug)
+  res.send(notePage({ s, note, next: list[i + 1] || null, prev: list[i - 1] || null, projects: await all(PUBLISHED) }))
+})
+
+// The résumé is built from the same content as the site, so it is never out of date.
+app.get('/resume', async (req, res) => {
+  const { s, stats } = await context()
+  const [projects, experience, skills] = await Promise.all([all(PUBLISHED), rowsOf('experience'), rowsOf('skills')])
+  res.send(resumePage({ s, stats, projects, experience, skills, print: 'print' in req.query }))
 })
 
 app.get('/work/:slug', async (req, res) => {
@@ -389,7 +484,7 @@ app.get('/work/:slug', async (req, res) => {
   const { s, stats } = await context()
   const list = await all('select slug, title from projects where published = 1 order by position asc, id desc')
   const i = list.findIndex(x => x.slug === p.slug)
-  res.send(projectPage({ s, p, stats, next: list.length > 1 ? list[(i + 1) % list.length] : null }))
+  res.send(projectPage({ s, p, stats, all: list, next: list.length > 1 ? list[(i + 1) % list.length] : null }))
 })
 
 /* ---------- live stats as an SVG badge, for the GitHub profile README ----------
@@ -424,10 +519,13 @@ app.get('/robots.txt', (_req, res) => res.type('text/plain')
 
 app.get('/sitemap.xml', async (_req, res) => {
   const slugs = await all('select slug from projects where published = 1')
+  const notes = await all('select slug from notes where published = 1')
   res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>${SITE}/</loc><priority>1.0</priority></url>
+  <url><loc>${SITE}/resume</loc><priority>0.7</priority></url>
 ${slugs.map(r => `  <url><loc>${SITE}/work/${r.slug}</loc><priority>0.8</priority></url>`).join('\n')}
+${notes.length ? `  <url><loc>${SITE}/notes</loc><priority>0.6</priority></url>\n` : ''}${notes.map(r => `  <url><loc>${SITE}/notes/${r.slug}</loc><priority>0.6</priority></url>`).join('\n')}
 </urlset>`)
 })
 
@@ -463,12 +561,22 @@ app.post('/admin/logout', (_req, res) => {
 
 app.use('/admin', requireAuth)
 
+// Everything the site is made of, as one JSON file: the weekly backup downloads this.
+app.get('/admin/export.json', async (_req, res) => {
+  const tables = {}
+  for (const t of ['settings', 'projects', 'experience', 'skills', 'notes', 'messages', 'referrals']) tables[t] = await all(`select * from ${t}`)
+  // image URLs referenced anywhere, so a backup can fetch the files too
+  const images = [...new Set(JSON.stringify(tables).match(/https:\/\/[\w.-]+\.public\.blob\.vercel-storage\.com\/[^"\s)\\]+/g) || [])]
+  res.set('Cache-Control', 'no-store').json({ exported_at: new Date().toISOString(), site: SITE, tables, images })
+})
+
 const counts = async () => {
-  const [p, e, k, u] = await Promise.all([
+  const [p, e, k, u, nt] = await Promise.all([
     get('select count(*) c from projects'), get('select count(*) c from experience'),
     get('select count(*) c from skills'), get('select count(*) c from messages where seen = 0'),
+    get('select count(*) c from notes'),
   ])
-  return { projects: p.c, experience: e.c, skills: k.c, unread: u.c }
+  return { projects: p.c, experience: e.c, skills: k.c, unread: u.c, notes: nt.c }
 }
 
 app.get('/admin', (_req, res) => res.redirect('/admin/projects'))
@@ -569,10 +677,10 @@ app.post('/admin/:entity/:id?', async (req, res) => {
       : f.t === 'number' ? (Number.parseInt(raw, 10) || 0)
         : String(raw ?? '').slice(0, 20000)
   }
-  if (key === 'projects') {
-    data.slug = slugify(data.slug || data.title) || `project-${Date.now()}`
+  if (key === 'projects' || key === 'notes') {
+    data.slug = slugify(data.slug || data.title) || `${key}-${Date.now()}`
     let n = 1
-    while (await get('select id from projects where slug = ? and id is not ?', data.slug, req.params.id ? Number(req.params.id) : null)) {
+    while (await get(`select id from ${key} where slug = ? and id is not ?`, data.slug, req.params.id ? Number(req.params.id) : null)) {
       data.slug = `${data.slug.replace(/-\d+$/, '')}-${++n}`
     }
   }

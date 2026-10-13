@@ -90,6 +90,10 @@ export const SCHEMA = `
     reply text default '', replied text default '');
   create table if not exists hits (key text primary key, times text not null default '', last integer default 0);
   create table if not exists referrals (day text not null, source text not null, n integer not null default 0, primary key (day, source));
+  create table if not exists notes (
+    id integer primary key, title text not null default '', slug text unique, body text default '',
+    image text default '', linkedin_url text default '', published_at text default '',
+    published integer default 1, position integer default 0);
 `
 
 /* ---------- GitHub contributions ----------

@@ -9,7 +9,7 @@ const shell = ({ title, nav = '', body, counts }) => `<!doctype html>
 <aside class="side">
   <a class="logo" href="/admin/projects">Portfolio<span>admin</span></a>
   <nav>
-    ${[['projects', 'Projects', counts.projects], ['experience', 'Experience', counts.experience], ['skills', 'Skills', counts.skills]]
+    ${[['projects', 'Projects', counts.projects], ['notes', 'Notes', counts.notes ?? 0], ['experience', 'Experience', counts.experience], ['skills', 'Skills', counts.skills]]
     .map(([k, l, c]) => `<a href="/admin/${k}" class="${nav === k ? 'on' : ''}">${l}<b>${c}</b></a>`).join('')}
     <a href="/admin/messages" class="${nav === 'messages' ? 'on' : ''}">Inbox${counts.unread ? `<b class="new">${counts.unread}</b>` : `<b>0</b>`}</a>
     <a href="/admin/settings" class="${nav === 'settings' ? 'on' : ''}">Settings</a>
@@ -129,6 +129,10 @@ const SETTING_GROUPS = [
     { n: 'now', l: 'Now', t: 'text', hint: 'One line in the hero: what you are on this month. {{servers}} works here too. Blank hides it.' },
     { n: 'about', l: 'About', t: 'textarea', rows: 7, hint: 'Blank line = new paragraph. **bold**, *italic*, `code`, [text](url) and - lists work.' },
     { n: 'avatar', l: 'Photo', t: 'image' },
+  ]],
+  ['Résumé', [
+    { n: 'headline', l: 'Résumé summary', t: 'textarea', rows: 3, hint: 'Two or three lines at the top of /resume. Blank uses the tagline.' },
+    { n: 'education', l: 'Education', t: 'textarea', rows: 3, hint: 'One line per entry: Degree · School · Years. Shown on /resume.' },
   ]],
   ['Links', [
     { n: 'resume', l: 'Résumé URL', t: 'text' }, { n: 'github', l: 'GitHub', t: 'text' },
