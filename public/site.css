@@ -379,3 +379,8 @@ img.hero{border:1px solid var(--line);margin:34px 0}
   .cv a{color:inherit;border-bottom:0}
   .cv h2{color:#1a4fd6}
 }
+
+/* ---- architecture diagrams ---- */
+.prose figure.diagram a{display:block;border:0;cursor:zoom-in}
+@media (min-width:1240px){.prose figure.diagram{width:1040px;max-width:none}}
+@media (max-width:720px){.prose figure.diagram a{overflow-x:auto}.prose figure.diagram img{min-width:820px}}

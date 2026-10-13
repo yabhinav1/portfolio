@@ -58,7 +58,12 @@ export const md = s => blocks(esc(s)).map(lines => {
   if (lines.every(l => /^[-*]\s+/.test(l))) return `<ul>${lines.map(l => `<li>${inline(l.replace(/^[-*]\s+/, ''))}</li>`).join('')}</ul>`
   if (lines.every(l => /^\d+[.)]\s+/.test(l))) return `<ol>${lines.map(l => `<li>${inline(l.replace(/^\d+[.)]\s+/, ''))}</li>`).join('')}</ol>`
   const img = lines.length === 1 && first.match(IMG)
-  if (img) return `<figure><img src="${img[2]}" alt="${img[1]}" loading="lazy">${img[1] ? `<figcaption>${inline(img[1])}</figcaption>` : ''}</figure>`
+  if (img) {
+    // Architecture diagrams get a wider figure and open full size, since their labels are small.
+    const dia = img[2].startsWith('/public/diagrams/')
+    const pic = `<img src="${img[2]}" alt="${img[1]}" loading="lazy">`
+    return `<figure${dia ? ' class="diagram"' : ''}>${dia ? `<a href="${img[2]}" target="_blank" rel="noopener">${pic}</a>` : pic}${img[1] ? `<figcaption>${inline(img[1])}</figcaption>` : ''}</figure>`
+  }
   return `<p>${inline(lines.join('<br>'))}</p>`
 }).join('')
 

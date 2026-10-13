@@ -74,3 +74,8 @@ test('parseContributions reads dates, levels and tooltip counts', async () => {
   assert.deepEqual(streaks([{ n: 1 }, { n: 0 }, { n: 0 }]), { current: 0, longest: 1 })
   assert.deepEqual(parseContributions('<html></html>'), { days: [], total: 0 })
 })
+
+test('diagram figures open full size, other images do not', () => {
+  assert.match(md('![Map](/public/diagrams/annie.svg)'), /^<figure class="diagram"><a href="\/public\/diagrams\/annie.svg" target="_blank" rel="noopener"><img/)
+  assert.match(md('![Shot](/public/x.png)'), /^<figure><img src="\/public\/x.png"/)
+})
