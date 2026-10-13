@@ -354,7 +354,7 @@ app.get('/', async (req, res) => {
 
 app.get('/work/:slug', async (req, res) => {
   const p = await get('select * from projects where slug = ? and published = 1', req.params.slug)
-  if (!p) return res.status(404).send(notFound(await getSettings(), await all(PUBLISHED)))
+  if (!p) { const c = await context(); return res.status(404).send(notFound(c.s, await all(PUBLISHED), c.stats)) }
   const { s, stats } = await context()
   const list = await all('select slug, title from projects where published = 1 order by position asc, id desc')
   const i = list.findIndex(x => x.slug === p.slug)
@@ -528,7 +528,10 @@ app.post('/admin/:entity/:id?', async (req, res) => {
   res.redirect(`/admin/${key}`)
 })
 
-app.use(async (_req, res) => res.status(404).send(notFound(await getSettings(), await all(PUBLISHED))))
+app.use(async (_req, res) => {
+  const { s, stats } = await context()
+  res.status(404).send(notFound(s, await all(PUBLISHED), stats))
+})
 app.use((err, req, res, _next) => {
   console.error(err)
   const back = req.path.startsWith('/admin') ? '/admin' : '/'

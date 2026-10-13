@@ -297,13 +297,13 @@ export const projectPage = ({ s, p, next, stats = {} }) => layout({
 })
 
 // A dead end that offers the work instead: the project list doubles as the menu.
-export const notFound = (s, projects = []) => layout({
+export const notFound = (s, projects = [], stats = {}) => layout({
   s, title: 'Not found', cls: 'sub',
   body: `${header(s)}<main id="main"><section class="intro"><h1>404<br><span class="qi">Nothing here.</span></h1>
   <p class="lede">That page moved or never existed. The work is still here, though.</p>
   <p class="meta"><a href="/">Back to the homepage</a><a href="/#contact">Get in touch</a></p></section>
   ${projects.length ? `<section class="block">
   <h2 class="kick"><span>Try one of these</span><b>${projects.length}</b></h2>
-  <div class="rows">${projects.map(p => workRow(p, {})).join('')}</div>
+  <div class="rows">${projects.map(p => workRow(p, stats)).join('')}</div>
 </section>` : ''}</main>${footer(s)}`,
 })
