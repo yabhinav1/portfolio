@@ -234,7 +234,8 @@ const shippedFor = async (s) => {
       if (repo) {
         const cr = await gh(`/repos/${user}/${repo.name}/commits?per_page=10`)
         if (!cr.ok) throw new Error(`commits ${cr.status}`)
-        const c = (await cr.json()).find(c => !/^(Merge|Record |Stats:|Harvest|Topic:|Redeploy)/.test(c.commit.message))
+        // Skip housekeeping and the commits my own workflows make (PDF refresh, backups, keepalives).
+        const c = (await cr.json()).find(c => !/^(Merge|Record |Stats:|Harvest|Topic:|Redeploy|Refresh résumé PDF|Backup |Keep the |Scheduled post|Audit:)/.test(c.commit.message))
         if (c) await setSetting('ship', JSON.stringify({ repo: repo.name, url: c.html_url,
           msg: c.commit.message.split('\n')[0].slice(0, 90), at: c.commit.author.date }))
       }
@@ -620,8 +621,9 @@ app.get('/admin/settings', async (req, res) => {
 })
 // Fetch both feeds right now, whatever their age, then show the result.
 app.post('/admin/feeds/refresh', async (_req, res) => {
+  await setSetting('ship_at', '0')
   const s = await getSettings()
-  await Promise.all([refreshStats(), ghUser(s) ? refreshGithub(ghUser(s)) : null])
+  await Promise.all([refreshStats(), ghUser(s) ? refreshGithub(ghUser(s)) : null, shippedFor(s)])
   res.redirect('/admin/settings')
 })
 const BOOL_SETTINGS = new Set(['available'])
