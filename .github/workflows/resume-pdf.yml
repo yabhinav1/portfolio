@@ -1,0 +1,51 @@
+# Renders /resume to public/resume.pdf with headless Chrome, so "Download PDF" always
+# matches the site. Weekly, or by hand from the Actions tab. Commits only when the page changed.
+name: Résumé PDF
+
+on:
+  schedule:
+    - cron: '30 2 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency: resume-pdf
+
+jobs:
+  pdf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Has the résumé changed?
+        id: diff
+        run: |
+          # Hash the page without the stylesheet version, which changes on every CSS edit.
+          new=$(curl -fsS https://yabhinav.dpdns.org/resume | sed 's/site\.css?v=[a-z0-9]*//' | sha256sum | cut -c1-16)
+          old=$(cat .github/resume.hash 2>/dev/null || true)
+          echo "new=$new" >> "$GITHUB_OUTPUT"
+          if [ "$new" = "$old" ] && [ -s public/resume.pdf ] && [ "${{ github.event_name }}" != workflow_dispatch ]; then
+            echo "changed=no" >> "$GITHUB_OUTPUT"; echo "No change since the last PDF."
+          else
+            echo "changed=yes" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Print to PDF
+        if: steps.diff.outputs.changed == 'yes'
+        run: |
+          google-chrome --headless=new --disable-gpu --no-sandbox --no-pdf-header-footer \
+            --virtual-time-budget=6000 --print-to-pdf=public/resume.pdf https://yabhinav.dpdns.org/resume
+          test "$(stat -c %s public/resume.pdf)" -gt 10000
+          echo "${{ steps.diff.outputs.new }}" > .github/resume.hash
+
+      - name: Commit
+        if: steps.diff.outputs.changed == 'yes'
+        run: |
+          git config user.name yabhinav1
+          git config user.email yabhinav0011@gmail.com
+          git add public/resume.pdf .github/resume.hash
+          git diff --cached --quiet && exit 0
+          git commit -m "Refresh résumé PDF"
+          git push
