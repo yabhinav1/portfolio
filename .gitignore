@@ -7,3 +7,4 @@ uploads/*
 .env
 .vercel
 .env*
+uptime-state.json

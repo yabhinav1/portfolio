@@ -371,13 +371,24 @@ img.hero{border:1px solid var(--line);margin:34px 0}
 .cv-skill span{color:var(--mid)}
 @media (max-width:720px){.cv{padding:30px 22px;margin-top:12px}.cv-skill{grid-template-columns:1fr;gap:2px}.cv-head h1{font-size:32px}}
 @media print{
-  @page{size:A4;margin:14mm 14mm}
+  @page{size:A4;margin:11mm 13mm}
   :root:root:root{--bg:#fff;--ink:#111;--mid:#333;--mut:#666;--line:#ddd;color-scheme:light}
   .cv-bar{display:none}
   .cv-body{background:#fff}
   .cv{border:0;margin:0;padding:0;max-width:none}
   .cv a{color:inherit;border-bottom:0}
-  .cv h2{color:#1a4fd6}
+  .cv h2{color:#1a4fd6;margin-bottom:9px;padding-bottom:6px}
+  .cv-head h1{font-size:30px}
+  .cv-role{font-size:14px;margin-top:4px}
+  .cv-links{margin-top:8px;font-size:11px}
+  .cv-sum{margin-top:12px;font-size:13px;line-height:1.5}
+  .cv section{margin-top:16px}
+  .cv-item{margin-bottom:8px}
+  .cv-line b{font-size:13.5px}
+  .cv-text{font-size:12.5px;line-height:1.45;margin-top:1px}
+  .cv-text ul{margin-top:2px}
+  .cv-tags,.cv-sub{font-size:10.5px;margin-top:2px}
+  .cv-skill{padding:2px 0;font-size:12.5px}
 }
 
 /* ---- architecture diagrams ---- */

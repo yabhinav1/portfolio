@@ -1,0 +1,37 @@
+# Checks the sites in scripts/uptime-sites.json every 15 minutes and posts to Discord
+# only when one goes down or comes back. Lives here because public repos run Actions free.
+name: Uptime
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency: uptime
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts
+      # The last result travels between runs in the cache: restore the newest, save a new one.
+      - uses: actions/cache@v4
+        with:
+          path: uptime-state.json
+          key: uptime-${{ github.run_id }}
+          restore-keys: uptime-
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check sites
+        env:
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_CHANNEL_ID: ${{ secrets.DISCORD_CHANNEL_ID }}
+          DISCORD_OWNER_ID: ${{ secrets.DISCORD_OWNER_ID }}
+        run: node scripts/uptime.mjs
