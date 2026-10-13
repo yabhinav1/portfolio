@@ -1,10 +1,8 @@
-# Checks the sites in scripts/uptime-sites.json every 15 minutes and posts to Discord
-# only when one goes down or comes back. Lives here because public repos run Actions free.
+# Manual uptime check. The regular checks now run every 10 minutes from the
+# linkedin-queue site (/api/tick), because GitHub's scheduler runs hours late.
 name: Uptime
 
 on:
-  schedule:
-    - cron: '*/15 * * * *'
   workflow_dispatch:
 
 permissions:
