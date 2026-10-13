@@ -85,6 +85,7 @@ views/site.js    public pages (and the two inline scripts the CSP allows)
 views/admin.js   admin pages
 public/*.css     two stylesheets
 public/fonts/    Inter and JetBrains Mono, self-hosted latin subsets
+public/og.png    link-preview card; docs/og.html is its source, re-render with a headless browser
 test/            node:test suite: `npm test`
 push-content.js  one-shot copy of local content into Turso
 portfolio.db     created on first run (gitignored)
