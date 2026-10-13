@@ -5,7 +5,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createClient } from '@libsql/client'
-import { put } from '@vercel/blob'
+import { put, get as blobGet } from '@vercel/blob'
+import { Readable } from 'node:stream'
 import { esc, slugify, fill, SCHEMA, parseContributions, streaks } from './lib.js'
 import { notifyNew, sendMail } from './notify.js'
 import { homePage, projectPage, notFound, notesPage, notePage, resumePage, SCRIPT } from './views/site.js'
@@ -411,6 +412,23 @@ app.use(express.urlencoded({ extended: false, limit: '256kb' }))
 app.use('/public', express.static(path.join(root, 'public'), { maxAge: '365d', immutable: true }))
 if (!BLOB) app.use('/uploads', express.static(path.join(DATA, 'uploads'), { maxAge: '7d' }))
 
+// Uploaded images live in a private Blob store. Names carry a random suffix, so a URL
+// never changes content and can be cached for a year.
+app.get('/media/*', async (req, res, next) => {
+  const name = req.params[0]
+  if (!BLOB || !/^[\w.-]+$/.test(name)) return next()
+  try {
+    const r = await blobGet(name, { access: 'private' })
+    if (!r || r.statusCode !== 200) return next()
+    res.set({ 'Content-Type': r.blob.contentType, 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' })
+    if (r.blob.contentType === 'image/svg+xml') res.set('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'")
+    Readable.fromWeb(r.stream).pipe(res)
+  } catch (e) {
+    console.error('media failed:', e.message)
+    next()
+  }
+})
+
 /* ---------- visits from LinkedIn ----------
    Each LinkedIn post's first comment links here with ?ref=li-<post id>, so the
    clicks each post brings in can be counted. Visits with a LinkedIn referrer but
@@ -566,7 +584,8 @@ app.get('/admin/export.json', async (_req, res) => {
   const tables = {}
   for (const t of ['settings', 'projects', 'experience', 'skills', 'notes', 'messages', 'referrals']) tables[t] = await all(`select * from ${t}`)
   // image URLs referenced anywhere, so a backup can fetch the files too
-  const images = [...new Set(JSON.stringify(tables).match(/https:\/\/[\w.-]+\.public\.blob\.vercel-storage\.com\/[^"\s)\\]+/g) || [])]
+  const images = [...new Set((JSON.stringify(tables).match(/https:\/\/[\w.-]+\.blob\.vercel-storage\.com\/[^"\s)\\]+|\/media\/[\w.-]+/g) || [])
+    .map(u => u.startsWith('/') ? SITE + u : u))]
   res.set('Cache-Control', 'no-store').json({ exported_at: new Date().toISOString(), site: SITE, tables, images })
 })
 
@@ -584,9 +603,15 @@ app.get('/admin', (_req, res) => res.redirect('/admin/projects'))
 app.post('/admin/upload', upload.single('file'), async (req, res) => {
   if (!req.file) return res.json({ url: null })
   if (!BLOB) return res.json({ url: `/uploads/${req.file.filename}` })
-  const { url } = await put(filename(req.file), req.file.buffer,
-    { access: 'public', contentType: req.file.mimetype, addRandomSuffix: true })
-  res.json({ url })
+  // The Blob store is private, so files are served back through /media/ below.
+  try {
+    const { pathname } = await put(filename(req.file), req.file.buffer,
+      { access: 'private', contentType: req.file.mimetype, addRandomSuffix: true })
+    res.json({ url: `/media/${pathname}` })
+  } catch (e) {
+    console.error('upload failed:', e.message)
+    res.status(500).json({ url: null, error: e.message })
+  }
 })
 
 app.get('/admin/settings', async (req, res) => {
