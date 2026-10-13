@@ -40,7 +40,7 @@ const get = (sql, ...args) => all(sql, ...args).then(r => r[0])
 const run = (sql, ...args) => client.execute({ sql, args })
 
 const DEFAULTS = {
-  name: 'Your Name', role: 'Full-stack developer', location: 'Bengaluru, India',
+  name: 'Your Name', role: 'Full-stack developer', location: 'Bengaluru, India', timezone: '',
   tagline: 'I build web products end to end, from the first sketch to the deploy.',
   about: 'Replace this in /admin → Settings.\n\nWrite two short paragraphs about how you work and what you care about. Specific beats impressive.',
   email: 'you@example.com', avatar: '', resume: '', available: '1',

@@ -5,8 +5,9 @@ const abs = (s, u) => !u ? '' : /^https?:/.test(u) ? u : `${s.site}${u}`
 // The two inline scripts, exported so the server can allow exactly these by hash in the
 // Content-Security-Policy. Edit them here and the hash follows; nothing else inline runs.
 export const SCRIPT = {
-  // runs before first paint so the reveal styles only apply when JS is on
-  flag: "document.documentElement.classList.add('js')",
+  // runs before first paint: reveal styles only apply when JS is on, and a theme the
+  // visitor chose earlier is applied before anything renders, so there is no flash
+  flag: "document.documentElement.classList.add('js');try{var t=localStorage.getItem('theme');if(t==='dark'||t==='light')document.documentElement.dataset.theme=t}catch(e){}",
   main: `
 (() => {
   const sel = '.intro > *:not(h1), .rows .row, .split > div, .exp article, .gh > *, h2.big, .cwrap > *, .case > *'
@@ -30,9 +31,52 @@ export const SCRIPT = {
   // If the observer never fires for some reason, don't leave the page blank.
   setTimeout(() => els.forEach(el => el.classList.add('in')), 3000)
 
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches
+  const html = document.documentElement
+
+  // Light / dark toggle. The choice is remembered; without one the system setting applies.
+  const tbtn = document.querySelector('.theme')
+  if (tbtn) tbtn.addEventListener('click', () => {
+    const dark = html.dataset.theme ? html.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
+    html.dataset.theme = dark ? 'light' : 'dark'
+    try { localStorage.setItem('theme', html.dataset.theme) } catch (e) {}
+  })
+
+  // Local time in the footer, for the time zone set in the admin.
+  const clock = document.querySelector('.clock')
+  if (clock) {
+    const tick = () => {
+      try { clock.lastChild.textContent = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: clock.dataset.tz }) } catch (e) {}
+    }
+    tick(); setInterval(tick, 20000)
+  }
+
+  // On a pointer device, hovering a project row floats its cover in full colour next
+  // to the cursor. Touch screens and small windows keep the inline thumbnail only.
+  if (matchMedia('(hover: hover) and (min-width: 821px)').matches && !still) {
+    const peek = document.createElement('div')
+    peek.className = 'peek'
+    const pimg = document.createElement('img')
+    pimg.alt = ''
+    peek.appendChild(pimg)
+    document.body.appendChild(peek)
+    let raf = 0, px = 0, py = 0
+    const place = () => {
+      raf = 0
+      const w = peek.offsetWidth, h = peek.offsetHeight
+      const x = Math.min(px + 28, innerWidth - w - 16)
+      const y = Math.max(16, Math.min(py - h / 2, innerHeight - h - 16))
+      peek.style.transform = 'translate(' + x + 'px,' + y + 'px)'
+    }
+    document.querySelectorAll('.row[data-cover]').forEach(row => {
+      row.addEventListener('pointerenter', e => { pimg.src = row.dataset.cover; px = e.clientX; py = e.clientY; place(); peek.classList.add('on') })
+      row.addEventListener('pointermove', e => { px = e.clientX; py = e.clientY; if (!raf) raf = requestAnimationFrame(place) })
+      row.addEventListener('pointerleave', () => peek.classList.remove('on'))
+    })
+  }
+
   const nums = [...document.querySelectorAll('b[data-to]')]
   if (!nums.length) return
-  const still = matchMedia('(prefers-reduced-motion: reduce)').matches
   const fmt = n => n.toLocaleString('en-US')
   const count = (el) => {
     const to = Number(el.dataset.to)
@@ -66,7 +110,8 @@ const layout = ({ s, title, body, cls = '', image = '' }) => `<!doctype html>
 <meta property="og:site_name" content="${esc(s.name)}">
 ${abs(s, image || s.og_image || s.avatar) ? `<meta property="og:image" content="${esc(abs(s, image || s.og_image || s.avatar))}">
 <meta name="twitter:card" content="summary_large_image">` : '<meta name="twitter:card" content="summary">'}
-<meta name="theme-color" content="#0a0a0a">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0a0a">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>◗</text></svg>">
 <link rel="preload" href="/public/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/public/site.css?v=${V.site}">
@@ -84,21 +129,28 @@ const header = s => `
     <a href="/#work">Work</a>
     <a href="/#about">About</a>
     ${s.resume ? `<a href="${esc(s.resume)}" target="_blank" rel="noopener">Résumé</a>` : ''}
+    <button class="theme" type="button" aria-label="Switch between light and dark" title="Light / dark"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
     <a class="ghost" href="/#contact">Get in touch</a>
   </nav>
 </header>`
 
+// Local time for the configured zone, rendered on the server so it is right before JS runs.
+const localTime = tz => { try {
+  return new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz })
+} catch { return '' } }
+
 const footer = s => {
   const links = [['GitHub', s.github], ['LinkedIn', s.linkedin], ['Twitter', s.twitter], ['Source', s.source]].filter(([, u]) => u)
+  const time = s.timezone ? localTime(s.timezone) : ''
   return `<footer class="foot">
-  <span>© ${new Date().getFullYear()} ${esc(s.name)}</span>
+  <span>© ${new Date().getFullYear()} ${esc(s.name)}${time ? ` <span class="clock" data-tz="${esc(s.timezone)}">· ${esc(s.location || s.timezone)} <b>${esc(time)}</b></span>` : ''}</span>
   <span class="fl">${links.map(([l, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener">${l}</a>`).join('')}
   <a href="mailto:${esc(s.email)}">Email</a></span>
 </footer>`
 }
 
 const workRow = (p, st) => `
-<a class="row" href="/work/${esc(p.slug)}">
+<a class="row" href="/work/${esc(p.slug)}"${p.image ? ` data-cover="${esc(p.image)}"` : ''}>
   <span class="row-t">
     <b>${esc(p.title)}</b>
     ${p.summary ? `<em>${esc(fill(p.summary, st))}</em>` : ''}
@@ -194,7 +246,7 @@ ${experience.length ? `<section class="block">
       <div>
         <h3>${esc(e.role)}${e.company ? ` <span>· ${esc(e.company)}</span>` : ''}</h3>
         ${e.location ? `<p class="loc">${esc(e.location)}</p>` : ''}
-        ${e.description ? `<div class="prose sm">${md(e.description)}</div>` : ''}
+        ${e.description ? `<div class="prose sm">${md(fill(e.description, stats))}</div>` : ''}
       </div>
     </article>`).join('')}</div>
 </section>` : ''}

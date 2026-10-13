@@ -13,10 +13,17 @@
   --sans:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
   --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 }
+/* Dark follows the system unless the visitor picked a theme with the header toggle,
+   which sets data-theme on <html> before first paint. */
 @media (prefers-color-scheme:dark){
-  :root{ --bg:#0a0a0a; --ink:#f2f2f2; --mid:#b8b8b8; --mut:#8a8a8a;
+  :root:not([data-theme=light]){ --bg:#0a0a0a; --ink:#f2f2f2; --mid:#b8b8b8; --mut:#8a8a8a;
          --line:#262626; --hard:#f2f2f2; --field:#141414; --accent:#7ea2ff; }
 }
+:root[data-theme=dark]{ --bg:#0a0a0a; --ink:#f2f2f2; --mid:#b8b8b8; --mut:#8a8a8a;
+         --line:#262626; --hard:#f2f2f2; --field:#141414; --accent:#7ea2ff; }
+html{color-scheme:light dark}
+:root[data-theme=dark]{color-scheme:dark}
+:root[data-theme=light]{color-scheme:light}
 *{box-sizing:border-box;margin:0}
 html{-webkit-text-size-adjust:100%}
 body{background:var(--bg);color:var(--ink);font:400 16px/1.55 var(--sans);
@@ -49,6 +56,18 @@ main{max-width:var(--w);margin:0 auto;padding:0 var(--gut)}
 .bar nav a:not(.ghost):hover::after{transform:scaleX(1);transform-origin:left}
 .bar nav a.ghost{color:var(--ink);border:1px solid var(--hard);padding:9px 14px}
 .bar nav a.ghost:hover{background:var(--ink);color:var(--bg)}
+.theme{all:unset;cursor:pointer;color:var(--mut);display:flex;padding:6px;margin:-6px;border-radius:50%;
+  transition:color .15s,transform .4s cubic-bezier(.22,.61,.36,1)}
+.theme svg{width:15px;height:15px;display:block}
+.theme:hover{color:var(--ink);transform:rotate(180deg)}
+.theme:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* floating cover preview, see the script in views/site.js */
+.peek{position:fixed;left:0;top:0;z-index:5;width:320px;aspect-ratio:16/10;pointer-events:none;
+  background:var(--bg);border:1px solid var(--line);box-shadow:0 24px 60px -20px rgba(0,0,0,.45);
+  opacity:0;scale:.96;transition:opacity .18s,scale .25s cubic-bezier(.22,.61,.36,1);will-change:transform}
+.peek img{width:100%;height:100%;object-fit:cover;display:block}
+.peek.on{opacity:1;scale:1}
 
 /* ---- intro ---- */
 .intro{padding:88px 0 72px;max-width:900px}
@@ -203,6 +222,7 @@ h2.big{font:700 clamp(38px,6.4vw,68px)/1.03 var(--sans);letter-spacing:-.045em;m
   gap:20px;flex-wrap:wrap;font:500 12px/1 var(--mono);color:var(--mut)}
 .fl{display:flex;gap:20px}
 .fl a:hover{color:var(--ink)}
+.clock b{font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
 
 /* ---- case study ---- */
 .case{padding:56px 0 90px;max-width:760px}
@@ -218,7 +238,7 @@ h2.big{font:700 clamp(38px,6.4vw,68px)/1.03 var(--sans);letter-spacing:-.045em;m
 .caseMeta a{border-bottom:1px solid var(--accent);font-size:14px}
 img.hero{border:1px solid var(--line);margin:34px 0}
 .prose.wide{max-width:none;font-size:16.5px}
-.next{margin-top:48px;padding-top:26px;border-top:1px solid var(--line)}
+.next{margin-top:48px;padding-top:26px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:14px 32px}
 .next a{font:500 13px/1 var(--mono);border-bottom:1px solid var(--accent);padding-bottom:3px}
 
 /* ---- responsive ---- */
