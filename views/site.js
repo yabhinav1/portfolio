@@ -160,7 +160,7 @@ const workRow = (p, st) => `
     ${p.tags ? `<span class="tags">${list(p.tags).map(t => `<i>${esc(t)}</i>`).join('')}</span>` : ''}
   </span>
   <span class="row-m">
-    ${p.image ? `<img src="${esc(p.image)}" alt="" loading="lazy" width="132" height="82">` : '<span class="ph"></span>'}
+    ${p.image ? `<img src="${esc(p.image)}" alt="" loading="lazy" width="180" height="112">` : '<span class="ph"></span>'}
     <span class="yr">${esc(p.year || '')}</span>
     <span class="arw" aria-hidden="true">→</span>
   </span>
@@ -214,6 +214,7 @@ export const homePage = ({ s, projects, experience, skills, sent, stats = {}, im
   <h1><span class="ln"><i>${esc(s.name)}</i></span><span class="ln"><i class="qi">${esc(s.role)}</i></span></h1>
   <p class="lede">${esc(s.tagline)}</p>
   <p class="meta">${s.location ? `<span>${esc(s.location)}</span>` : ''}<a href="mailto:${esc(s.email)}">${esc(s.email)}</a></p>
+  ${(s.now || '').trim() ? `<p class="now"><b>Now</b><span>${esc(s.now)}</span></p>` : ''}
   ${stats.raw_servers ? `<p class="live">
     <span><b data-to="${stats.raw_servers}">${esc(stats.servers)}</b> servers running Annie</span>
     <span><b data-to="${stats.raw_users}">${esc(stats.users)}</b> users reached</span>
@@ -295,9 +296,14 @@ export const projectPage = ({ s, p, next, stats = {} }) => layout({
 </main>${footer(s)}`,
 })
 
-export const notFound = s => layout({
+// A dead end that offers the work instead: the project list doubles as the menu.
+export const notFound = (s, projects = []) => layout({
   s, title: 'Not found', cls: 'sub',
   body: `${header(s)}<main id="main"><section class="intro"><h1>404<br><span class="qi">Nothing here.</span></h1>
-  <p class="lede">That page moved or never existed.</p>
-  <p class="meta"><a href="/">Back to the homepage</a></p></section></main>${footer(s)}`,
+  <p class="lede">That page moved or never existed. The work is still here, though.</p>
+  <p class="meta"><a href="/">Back to the homepage</a><a href="/#contact">Get in touch</a></p></section>
+  ${projects.length ? `<section class="block">
+  <h2 class="kick"><span>Try one of these</span><b>${projects.length}</b></h2>
+  <div class="rows">${projects.map(p => workRow(p, {})).join('')}</div>
+</section>` : ''}</main>${footer(s)}`,
 })

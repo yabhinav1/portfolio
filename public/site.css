@@ -6,8 +6,8 @@
 
 /* ---- tokens ---- */
 :root{
-  --bg:#fff; --ink:#0a0a0a; --mid:#404040; --mut:#767676;
-  --line:#e3e3e3; --hard:#0a0a0a; --field:#fafafa;
+  --bg:#fff; --ink:#0a0a0a; --mid:#3a3a3a; --mut:#6f6f6f;
+  --line:#dcdcdc; --hard:#0a0a0a; --field:#f5f5f5;
   --accent:#1a4fd6;
   --w:1120px; --gut:32px;
   --sans:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
@@ -93,6 +93,9 @@ h1{font:700 clamp(44px,8.2vw,86px)/1.02 var(--sans);letter-spacing:-.045em}
 .ln:nth-child(2) i{animation-delay:.09s}
 @keyframes rise{from{transform:translateY(105%)}to{transform:translateY(0)}}
 
+.now{margin-top:26px;display:flex;gap:14px;align-items:baseline;max-width:56ch;font-size:15.5px;line-height:1.5;color:var(--mid)}
+.now b{font:500 11px/1 var(--mono);text-transform:uppercase;letter-spacing:.12em;color:var(--accent);white-space:nowrap;
+  border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);padding:5px 7px 4px}
 .live{margin-top:26px;display:flex;flex-wrap:wrap;gap:10px 26px;
   font:500 12px/1 var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--mut)}
 .live b{font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
@@ -118,13 +121,14 @@ h1{font:700 clamp(44px,8.2vw,86px)/1.02 var(--sans);letter-spacing:-.045em}
   letter-spacing:.06em;border:1px solid var(--line);padding:5px 7px;color:var(--mut)}
 .row:hover .tags i{border-color:color-mix(in srgb,var(--bg) 45%,transparent);color:var(--bg)}
 .row-m{display:flex;align-items:center;gap:20px}
-.row-m img{width:132px;height:82px;object-fit:cover;border:1px solid var(--line);transition:filter .2s}
-/* touch devices have no hover, so covers would stay grey */
+.row-m img{width:180px;height:112px;object-fit:cover;border:1px solid var(--line);transition:filter .25s,opacity .25s}
+/* muted, not hidden: enough colour to read the work at a glance, full colour on hover.
+   touch devices have no hover, so they get full colour always */
 @media (hover:hover){
-  .row-m img{filter:grayscale(1)}
-  .row:hover .row-m img{filter:none}
+  .row-m img{filter:grayscale(.75) contrast(.95);opacity:.85}
+  .row:hover .row-m img{filter:none;opacity:1}
 }
-.row-m .ph{width:132px;height:82px;border:1px solid var(--line);display:block}
+.row-m .ph{width:180px;height:112px;border:1px solid var(--line);display:block}
 .yr{font:500 12px/1 var(--mono);color:var(--mut)}
 .row:hover .yr{color:var(--bg);opacity:.7}
 .arw{font-size:17px;color:var(--mut);transition:transform .25s cubic-bezier(.22,.61,.36,1)}
@@ -182,9 +186,9 @@ h1{font:700 clamp(44px,8.2vw,86px)/1.02 var(--sans);letter-spacing:-.045em}
 .ghGrid{grid-template-rows:repeat(7,var(--c));grid-auto-flow:column}
 .ghGrid i,.ghLegend i{display:block;width:var(--c,10px);height:var(--c,10px);border-radius:2px;background:var(--line)}
 .ghGrid i.pad{background:transparent}
-.ghGrid i[data-l="1"],.ghLegend i[data-l="1"]{background:color-mix(in srgb,var(--accent) 30%,var(--bg))}
-.ghGrid i[data-l="2"],.ghLegend i[data-l="2"]{background:color-mix(in srgb,var(--accent) 55%,var(--bg))}
-.ghGrid i[data-l="3"],.ghLegend i[data-l="3"]{background:color-mix(in srgb,var(--accent) 80%,var(--bg))}
+.ghGrid i[data-l="1"],.ghLegend i[data-l="1"]{background:color-mix(in srgb,var(--accent) 38%,var(--bg))}
+.ghGrid i[data-l="2"],.ghLegend i[data-l="2"]{background:color-mix(in srgb,var(--accent) 60%,var(--bg))}
+.ghGrid i[data-l="3"],.ghLegend i[data-l="3"]{background:color-mix(in srgb,var(--accent) 82%,var(--bg))}
 .ghGrid i[data-l="4"],.ghLegend i[data-l="4"]{background:var(--accent)}
 .ghGrid i:not(.pad):hover{outline:1px solid var(--ink);outline-offset:1px}
 .ghFoot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px 20px;margin-top:16px;

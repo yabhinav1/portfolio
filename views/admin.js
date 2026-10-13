@@ -126,6 +126,7 @@ const SETTING_GROUPS = [
     { n: 'location', l: 'Location', t: 'text' }, { n: 'email', l: 'Contact email', t: 'text' },
     { n: 'timezone', l: 'Time zone', t: 'text', hint: 'IANA name such as Asia/Kolkata. Shows your local time in the footer. Blank hides it.' },
     { n: 'tagline', l: 'Tagline', t: 'textarea', rows: 2, hint: 'One sentence under your name on the homepage.' },
+    { n: 'now', l: 'Now', t: 'text', hint: 'One line in the hero: what you are on this month. {{servers}} works here too. Blank hides it.' },
     { n: 'about', l: 'About', t: 'textarea', rows: 7, hint: 'Blank line = new paragraph. **bold**, *italic*, `code`, [text](url) and - lists work.' },
     { n: 'avatar', l: 'Photo', t: 'image' },
   ]],

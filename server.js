@@ -40,7 +40,7 @@ const get = (sql, ...args) => all(sql, ...args).then(r => r[0])
 const run = (sql, ...args) => client.execute({ sql, args })
 
 const DEFAULTS = {
-  name: 'Your Name', role: 'Full-stack developer', location: 'Bengaluru, India', timezone: '',
+  name: 'Your Name', role: 'Full-stack developer', location: 'Bengaluru, India', timezone: '', now: '',
   tagline: 'I build web products end to end, from the first sketch to the deploy.',
   about: 'Replace this in /admin → Settings.\n\nWrite two short paragraphs about how you work and what you care about. Specific beats impressive.',
   email: 'you@example.com', avatar: '', resume: '', available: '1',
@@ -128,7 +128,7 @@ const shape = (s) => {
 // Settings are rendered in several places (hero, about, meta tags), so fill them once
 // here rather than at each call site.
 const withStats = (s, st) => ({ ...s,
-  tagline: fill(s.tagline, st), about: fill(s.about, st),
+  tagline: fill(s.tagline, st), about: fill(s.about, st), now: fill(s.now, st),
   seo_description: fill(s.seo_description, st), role: fill(s.role, st) })
 
 const statsFor = async (s) => {
@@ -354,7 +354,7 @@ app.get('/', async (req, res) => {
 
 app.get('/work/:slug', async (req, res) => {
   const p = await get('select * from projects where slug = ? and published = 1', req.params.slug)
-  if (!p) return res.status(404).send(notFound(await getSettings()))
+  if (!p) return res.status(404).send(notFound(await getSettings(), await all(PUBLISHED)))
   const { s, stats } = await context()
   const list = await all('select slug, title from projects where published = 1 order by position asc, id desc')
   const i = list.findIndex(x => x.slug === p.slug)
@@ -528,7 +528,7 @@ app.post('/admin/:entity/:id?', async (req, res) => {
   res.redirect(`/admin/${key}`)
 })
 
-app.use(async (_req, res) => res.status(404).send(notFound(await getSettings())))
+app.use(async (_req, res) => res.status(404).send(notFound(await getSettings(), await all(PUBLISHED))))
 app.use((err, req, res, _next) => {
   console.error(err)
   const back = req.path.startsWith('/admin') ? '/admin' : '/'
