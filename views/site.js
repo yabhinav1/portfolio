@@ -258,7 +258,8 @@ const footer = s => {
 
 // "● up · 120 ms" next to a project title, from the cached status check.
 const livePill = st => !st ? '' : st.up
-  ? `<span class="live-pill up" title="Checked in the last 10 minutes">${st.ms != null ? `up · ${n(st.ms)} ms${st.label ? ` ${esc(st.label)}` : ''}` : 'up'}</span>`
+  // A website's response time is mostly serverless cold start, so only the bot's gateway ping is shown.
+  ? `<span class="live-pill up" title="Answered a check in the last 10 minutes">${st.ms != null && st.label ? `live · ${n(st.ms)} ms ${esc(st.label)}` : 'live'}</span>`
   : '<span class="live-pill down" title="Did not answer the last check">down</span>'
 
 const timeAgo = iso => {
