@@ -89,6 +89,7 @@ export const SCHEMA = `
     created text default '', seen integer default 0,
     reply text default '', replied text default '');
   create table if not exists hits (key text primary key, times text not null default '', last integer default 0);
+  create table if not exists referrals (day text not null, source text not null, n integer not null default 0, primary key (day, source));
 `
 
 /* ---------- GitHub contributions ----------

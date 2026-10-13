@@ -164,3 +164,16 @@ test('the stats badge is an SVG with a short cache life, in both themes', async 
   assert.match(light, /fill="#ffffff"/)
   assert.doesNotMatch(svg, /fill="#ffffff"/)
 })
+
+test('visits from LinkedIn are counted per post, crawlers and other sources are not', async () => {
+  await get('/?ref=li-2026-10-13-glibc-arena-leak')
+  await get('/?ref=li-2026-10-13-glibc-arena-leak')
+  await get('/', { referer: 'https://www.linkedin.com/feed/' })
+  await get('/?ref=li-x', { 'user-agent': 'LinkedInBot/1.0' })
+  await get('/?ref=../../etc')
+  await get('/', { referer: 'https://google.com/' })
+  const s = await (await get('/stats/linkedin.json')).json()
+  const today = new Date().toISOString().slice(0, 10)
+  assert.equal(s.days[today], 3)
+  assert.deepEqual(s.refs, { 'li-2026-10-13-glibc-arena-leak': 2 })
+})

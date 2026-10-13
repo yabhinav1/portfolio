@@ -337,6 +337,37 @@ app.use(express.urlencoded({ extended: false, limit: '256kb' }))
 app.use('/public', express.static(path.join(root, 'public'), { maxAge: '365d', immutable: true }))
 if (!BLOB) app.use('/uploads', express.static(path.join(DATA, 'uploads'), { maxAge: '7d' }))
 
+/* ---------- visits from LinkedIn ----------
+   Each LinkedIn post's first comment links here with ?ref=li-<post id>, so the
+   clicks each post brings in can be counted. Visits with a LinkedIn referrer but
+   no ref count as "linkedin". Counts only: no IPs, no cookies, nothing personal. */
+const refSource = req => {
+  const ref = String(req.query.ref || '')
+  if (/^li-[a-z0-9-]{1,80}$/i.test(ref)) return ref.toLowerCase()
+  const from = String(req.headers.referer || '')
+  if (/^https?:\/\/([\w-]+\.)*(linkedin\.com|lnkd\.in)\//i.test(from)) return 'linkedin'
+  return null
+}
+app.use(async (req, _res, next) => {
+  if (req.method !== 'GET' || req.path.startsWith('/admin') || req.path.startsWith('/public') || req.path.startsWith('/badge') || req.path.startsWith('/stats')) return next()
+  const src = refSource(req)
+  if (src && !/bot|crawl|spider|preview|linkedinbot/i.test(req.headers['user-agent'] || '')) {
+    await run('insert into referrals(day, source, n) values(?,?,1) on conflict(day, source) do update set n = n + 1',
+      new Date().toISOString().slice(0, 10), src).catch(e => console.warn('referral count failed:', e.message))
+  }
+  next()
+})
+app.get('/stats/linkedin.json', async (_req, res) => {
+  const since = new Date(Date.now() - 90 * 864e5).toISOString().slice(0, 10)
+  const rows = await all("select day, source, n from referrals where day >= ? and (source = 'linkedin' or source like 'li-%') order by day", since)
+  const days = {}, refs = {}
+  for (const r of rows) {
+    days[r.day] = (days[r.day] || 0) + Number(r.n)
+    if (r.source !== 'linkedin') refs[r.source] = (refs[r.source] || 0) + Number(r.n)
+  }
+  res.set('Cache-Control', 'public, max-age=300').json({ since, days, refs })
+})
+
 /* ---------- public site ---------- */
 app.get('/', async (req, res) => {
   const { s, stats } = await context()
