@@ -6,7 +6,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createClient } from '@libsql/client'
 import { put } from '@vercel/blob'
-import { slugify, fill, SCHEMA, parseContributions, streaks } from './lib.js'
+import { esc, slugify, fill, SCHEMA, parseContributions, streaks } from './lib.js'
 import { notifyNew, sendMail } from './notify.js'
 import { homePage, projectPage, notFound, SCRIPT } from './views/site.js'
 import { adminList, adminForm, adminSettings, adminInbox, loginPage } from './views/admin.js'
@@ -359,6 +359,33 @@ app.get('/work/:slug', async (req, res) => {
   const list = await all('select slug, title from projects where published = 1 order by position asc, id desc')
   const i = list.findIndex(x => x.slug === p.slug)
   res.send(projectPage({ s, p, stats, next: list.length > 1 ? list[(i + 1) % list.length] : null }))
+})
+
+/* ---------- live stats as an SVG badge, for the GitHub profile README ----------
+   GitHub proxies README images and honours short cache lifetimes, so the profile
+   shows the same numbers as the site. ?theme=light for a white background. */
+app.get('/badge/stats.svg', async (req, res) => {
+  const { stats } = await context()
+  const dark = req.query.theme !== 'light'
+  const bg = dark ? '#0a0a0a' : '#ffffff', ink = dark ? '#f2f2f2' : '#0a0a0a'
+  const mut = dark ? '#8a8a8a' : '#6f6f6f', line = dark ? '#262626' : '#dcdcdc', accent = dark ? '#7ea2ff' : '#1a4fd6'
+  const parts = stats.raw_servers
+    ? [[stats.servers, 'servers running Annie'], [stats.users, 'users reached']]
+    : [['Annie', 'live stats unavailable']]
+  // ~8.4px per character at this size, which is close enough for a badge
+  const w = 40 + parts.reduce((n, [v, l]) => n + (v.length + l.length + 1) * 8.4 + 28, 0)
+  let x = 20
+  const text = parts.map(([v, l]) => {
+    const t = `<text x="${x}" y="27" font-weight="600" fill="${ink}">${esc(v)}</text><text x="${x + v.length * 8.4 + 6}" y="27" fill="${mut}">${esc(l)}</text>`
+    x += (v.length + l.length + 1) * 8.4 + 28
+    return t
+  }).join('')
+  res.set('Cache-Control', 'public, max-age=1800').type('image/svg+xml').send(
+`<svg xmlns="http://www.w3.org/2000/svg" width="${Math.round(w)}" height="44" viewBox="0 0 ${Math.round(w)} 44" role="img" aria-label="${esc(parts.map(p => p.join(' ')).join(', '))}">
+<rect x=".5" y=".5" width="${Math.round(w) - 1}" height="43" fill="${bg}" stroke="${line}"/>
+<circle cx="${Math.round(w) - 18}" cy="22" r="3" fill="${accent}"/>
+<g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="14">${text}</g>
+</svg>`)
 })
 
 app.get('/robots.txt', (_req, res) => res.type('text/plain')

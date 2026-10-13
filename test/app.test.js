@@ -151,3 +151,16 @@ test('admin can refresh the feeds and sees why a refresh failed', async () => {
   assert.match(page, /GitHub activity · no GitHub link set/)
   assert.match(page, /Refresh both now/)
 })
+
+test('the stats badge is an SVG with a short cache life, in both themes', async () => {
+  const r = await get('/badge/stats.svg')
+  assert.equal(r.status, 200)
+  assert.match(r.headers.get('content-type'), /image\/svg\+xml/)
+  assert.match(r.headers.get('cache-control'), /max-age=1800/)
+  const svg = await r.text()
+  assert.match(svg, /^<svg /)
+  assert.match(svg, /Annie/)
+  const light = await (await get('/badge/stats.svg?theme=light')).text()
+  assert.match(light, /fill="#ffffff"/)
+  assert.doesNotMatch(svg, /fill="#ffffff"/)
+})
