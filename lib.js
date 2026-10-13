@@ -9,7 +9,7 @@ const pub = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public')
 const hash = f => { try {
   return crypto.createHash('sha1').update(fs.readFileSync(path.join(pub, f))).digest('hex').slice(0, 8)
 } catch { return '0' } }
-export const V = { site: hash('site.css'), admin: hash('admin.css') }
+export const V = { site: hash('site.css'), admin: hash('admin.css'), og: hash('og.png') }
 
 export const esc = s => String(s ?? '').replace(/[&<>"']/g,
   c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))

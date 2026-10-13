@@ -1,6 +1,9 @@
 import { esc, md, list, fill, V } from '../lib.js'
 
 const abs = (s, u) => !u ? '' : /^https?:/.test(u) ? u : `${s.site}${u}`
+// Link-preview crawlers cache images by URL for a long time, so the bundled card gets a
+// content hash in its URL and every change to it is picked up as a new image.
+const preview = (s, u) => { const a = abs(s, u); return a.endsWith('/public/og.png') ? `${a}?v=${V.og}` : a }
 
 // The two inline scripts, exported so the server can allow exactly these by hash in the
 // Content-Security-Policy. Edit them here and the hash follows; nothing else inline runs.
@@ -108,7 +111,7 @@ const layout = ({ s, title, body, cls = '', image = '' }) => `<!doctype html>
 <meta property="og:description" content="${esc(s.seo_description || s.tagline)}">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="${esc(s.name)}">
-${abs(s, image || s.og_image || s.avatar) ? `<meta property="og:image" content="${esc(abs(s, image || s.og_image || s.avatar))}">
+${abs(s, image || s.og_image || s.avatar) ? `<meta property="og:image" content="${esc(preview(s, image || s.og_image || s.avatar))}">${preview(s, image || s.og_image || s.avatar).includes('/public/og.png') ? '\n<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">' : ''}
 <meta name="twitter:card" content="summary_large_image">` : '<meta name="twitter:card" content="summary">'}
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0a0a">
