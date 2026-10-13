@@ -178,19 +178,30 @@ h1{font:700 clamp(44px,8.2vw,86px)/1.02 var(--sans);letter-spacing:-.045em}
 .ghStats{display:flex;flex-wrap:wrap;gap:10px 26px;margin-bottom:22px;
   font:500 12px/1 var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--mut)}
 .ghStats b{font-weight:500;color:var(--ink);font-variant-numeric:tabular-nums}
-.ghWrap{overflow-x:auto;padding-bottom:6px}
-.ghMonths,.ghGrid{--c:11px;--g:3px;display:grid;grid-template-columns:repeat(53,var(--c));
-  grid-auto-columns:var(--c);gap:var(--g);min-width:max-content}
-.ghMonths{margin-bottom:6px;font:500 10px/1 var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--mut)}
+/* GitHub's own contribution greens, light and dark */
+.gh{--gh0:#ebedf0;--gh1:#9be9a8;--gh2:#40c463;--gh3:#30a14e;--gh4:#216e39;--ghEdge:rgba(27,31,35,.06)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .gh{--gh0:#161b22;--gh1:#0e4429;--gh2:#006d32;--gh3:#26a641;--gh4:#39d353;--ghEdge:rgba(255,255,255,.05)}}
+:root[data-theme=dark] .gh{--gh0:#161b22;--gh1:#0e4429;--gh2:#006d32;--gh3:#26a641;--gh4:#39d353;--ghEdge:rgba(255,255,255,.05)}
+.ghWrap{overflow-x:auto;padding:4px 0 8px;scrollbar-width:thin}
+.ghCal{--c:11px;--g:3px;display:grid;grid-template-columns:auto max-content;column-gap:8px;row-gap:6px;width:max-content}
+.ghMonths,.ghGrid{display:grid;grid-template-columns:repeat(53,var(--c));grid-auto-columns:var(--c);gap:var(--g)}
+.ghMonths{font:400 11px/1 var(--sans);color:var(--mid)}
 .ghMonths span{grid-row:1;white-space:nowrap}
+.ghDays{display:grid;grid-template-rows:repeat(7,var(--c));gap:var(--g);font:400 10.5px/var(--c) var(--sans);color:var(--mid);text-align:right}
 .ghGrid{grid-template-rows:repeat(7,var(--c));grid-auto-flow:column}
-.ghGrid i,.ghLegend i{display:block;width:var(--c,10px);height:var(--c,10px);border-radius:2px;background:var(--line)}
-.ghGrid i.pad{background:transparent}
-.ghGrid i[data-l="1"],.ghLegend i[data-l="1"]{background:color-mix(in srgb,var(--accent) 38%,var(--bg))}
-.ghGrid i[data-l="2"],.ghLegend i[data-l="2"]{background:color-mix(in srgb,var(--accent) 60%,var(--bg))}
-.ghGrid i[data-l="3"],.ghLegend i[data-l="3"]{background:color-mix(in srgb,var(--accent) 82%,var(--bg))}
-.ghGrid i[data-l="4"],.ghLegend i[data-l="4"]{background:var(--accent)}
-.ghGrid i:not(.pad):hover{outline:1px solid var(--ink);outline-offset:1px}
+.ghGrid i,.ghLegend i{display:block;width:var(--c,10px);height:var(--c,10px);border-radius:2px;background:var(--gh0);outline:1px solid var(--ghEdge);outline-offset:-1px}
+.ghGrid i.pad{background:transparent;outline:0}
+.ghGrid i[data-l="1"],.ghLegend i[data-l="1"]{background:var(--gh1)}
+.ghGrid i[data-l="2"],.ghLegend i[data-l="2"]{background:var(--gh2)}
+.ghGrid i[data-l="3"],.ghLegend i[data-l="3"]{background:var(--gh3)}
+.ghGrid i[data-l="4"],.ghLegend i[data-l="4"]{background:var(--gh4)}
+.ghGrid i[data-tip]{cursor:pointer}
+.ghGrid i[data-tip]:hover{outline:1px solid var(--ink);outline-offset:0}
+/* GitHub's tooltip: dark bubble, small arrow, appears instantly */
+.ghTip{position:fixed;z-index:30;left:0;top:0;pointer-events:none;opacity:0;transform:translateY(2px);transition:opacity .08s,transform .08s;
+  background:#25292e;color:#fff;font:400 12px/1.4 var(--sans);padding:6px 8px;border-radius:6px;white-space:nowrap;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.ghTip:after{content:"";position:absolute;top:100%;left:var(--ax,50%);margin-left:-5px;border:5px solid transparent;border-top-color:#25292e}
+.ghTip.on{opacity:1;transform:none}
 .ghFoot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px 20px;margin-top:16px;
   font:500 12px/1 var(--mono);color:var(--mut)}
 .ghLegend{display:inline-flex;align-items:center;gap:3px}

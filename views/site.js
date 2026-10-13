@@ -78,6 +78,33 @@ export const SCRIPT = {
     })
   }
 
+  // GitHub-style tooltip on the contribution calendar: instant, above the square,
+  // on hover or tap. The calendar scrolls to today on narrow screens, like GitHub.
+  const grid = document.querySelector('.ghGrid')
+  if (grid) {
+    const wrap = grid.closest('.ghWrap')
+    if (wrap) wrap.scrollLeft = wrap.scrollWidth
+    const tip = document.createElement('div')
+    tip.className = 'ghTip'
+    tip.setAttribute('role', 'tooltip')
+    document.body.appendChild(tip)
+    const show = cell => {
+      tip.textContent = cell.dataset.tip
+      tip.classList.add('on')
+      const r = cell.getBoundingClientRect(), w = tip.offsetWidth
+      const x = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, innerWidth - w - 8))
+      tip.style.left = x + 'px'
+      tip.style.top = (r.top - tip.offsetHeight - 8) + 'px'
+      tip.style.setProperty('--ax', (r.left + r.width / 2 - x) + 'px')
+    }
+    const hide = () => tip.classList.remove('on')
+    grid.addEventListener('pointerover', e => { const c = e.target.closest('[data-tip]'); if (c) show(c) })
+    grid.addEventListener('pointerleave', hide)
+    grid.addEventListener('click', e => { const c = e.target.closest('[data-tip]'); if (c) show(c) })
+    addEventListener('scroll', hide, { passive: true })
+    if (wrap) wrap.addEventListener('scroll', hide, { passive: true })
+  }
+
   const nums = [...document.querySelectorAll('b[data-to]')]
   if (!nums.length) return
   const fmt = n => n.toLocaleString('en-US')
@@ -166,17 +193,19 @@ const workRow = (p, st) => `
   </span>
 </a>`
 
-/* ---------- GitHub activity: a year of contributions as a calendar heatmap ----------
-   One hue (the accent) stepping light to dark for magnitude, GitHub's own 0-4 levels,
-   a title on every cell, and a plain-text summary for screen readers. */
-const fmtDate = d => new Date(d + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+/* ---------- GitHub activity: the contribution calendar, the way GitHub draws it ----------
+   GitHub's five green levels, Mon/Wed/Fri down the side, months across the top, and
+   GitHub's own tooltip wording ("9 contributions on August 20th."), shown by the page
+   script on hover or tap. A plain-text summary covers screen readers. */
 const n = v => Number(v).toLocaleString('en-US')
+const ordinal = d => d + (d % 100 >= 11 && d % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][d % 10] || 'th')
+const tipDate = d => { const x = new Date(d + 'T00:00:00Z'); return `${x.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' })} ${ordinal(x.getUTCDate())}` }
 const githubSection = (g, s) => {
   if (!g || !g.days.length) return ''
   // GitHub's grid starts on a Sunday; pad so weekdays line up in rows
   const pad = new Date(g.days[0].d + 'T00:00:00Z').getUTCDay()
   const cells = Array(pad).fill('<i class="pad"></i>').concat(g.days.map(x =>
-    `<i data-l="${x.l}" title="${x.n === 0 ? 'No contributions' : `${n(x.n)} contribution${x.n === 1 ? '' : 's'}`} on ${fmtDate(x.d)}"></i>`))
+    `<i data-l="${x.l}" data-tip="${x.n === 0 ? 'No contributions' : `${n(x.n)} contribution${x.n === 1 ? '' : 's'}`} on ${tipDate(x.d)}."></i>`))
   const months = []
   g.days.forEach((x, i) => {
     if (x.d.slice(8) !== '01') return
@@ -193,10 +222,12 @@ const githubSection = (g, s) => {
     <span><b>${g.current}</b> day${g.current === 1 ? '' : 's'} current streak</span>
     <span><b>${g.longest}</b> day${g.longest === 1 ? '' : 's'} longest streak</span>
   </p>
-  <div class="ghWrap">
+  <div class="ghWrap"><div class="ghCal">
+    <span></span>
     <div class="ghMonths" aria-hidden="true">${months.map(m => `<span style="grid-column:${m.col}">${m.m}</span>`).join('')}</div>
+    <div class="ghDays" aria-hidden="true"><span></span><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span></div>
     <div class="ghGrid" role="img" aria-label="${esc(summary)}">${cells.join('')}</div>
-  </div>
+  </div></div>
   <p class="ghFoot">
     <span class="ghLegend" aria-hidden="true">Less <i data-l="0"></i><i data-l="1"></i><i data-l="2"></i><i data-l="3"></i><i data-l="4"></i> More</span>
     <a href="${esc(s.github)}" target="_blank" rel="noopener">@${esc(g.user)} on GitHub →</a>
