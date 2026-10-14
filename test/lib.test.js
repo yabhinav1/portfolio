@@ -79,3 +79,10 @@ test('diagram figures open full size, other images do not', () => {
   assert.match(md('![Map](/public/diagrams/annie.svg)'), /^<figure class="diagram"><a href="\/public\/diagrams\/annie.svg" target="_blank" rel="noopener"><img/)
   assert.match(md('![Shot](/public/x.png)'), /^<figure><img src="\/public\/x.png"/)
 })
+
+test('text saved from a textarea (\\r\\n, trailing spaces) still renders images and paragraphs', () => {
+  const out = md('Intro line\r\n\r\n![Map](/public/diagrams/annie.svg) \r\n\r\nOne\r\ntwo')
+  assert.match(out, /<figure class="diagram">/)
+  assert.ok(!out.includes('\r'))
+  assert.match(out, /<p>One<br>two<\/p>$/)
+})

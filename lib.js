@@ -47,7 +47,10 @@ const blocks = text => {
 
 const IMG = /^!\[(.*?)\]\((https?:\/\/[^\s)]+|\/[^\s)]+)\)$/
 
-export const md = s => blocks(esc(s)).map(lines => {
+// Text saved from a form textarea has \r\n line endings, and a stray \r at the end of
+// a line stopped an image line from matching, so it rendered as a link. Normalise first.
+export const md = s => blocks(esc(s).replace(/\r\n?/g, '\n')).map(lines => {
+  lines = lines.map(l => l.trimEnd())
   const first = lines[0]
   if (/^`{3,}/.test(first)) {
     const closed = lines.length > 1 && /^`{3,}$/.test(lines.at(-1).trim())
