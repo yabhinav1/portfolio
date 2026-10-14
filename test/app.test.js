@@ -116,6 +116,24 @@ test('admin creates a project and its markdown renders on the public page', asyn
   assert.match(await (await get('/')).text(), /og:image" content="http:\/\/localhost:\d+\/public\/cover.png"/)
 })
 
+test('a project marked "show the live site" embeds its live URL, others keep the cover', async () => {
+  const cookie = await login()
+  await post('/admin/projects', { title: 'Live One', link: 'https://live.example/', embed: 'on', published: 'on', image: '/public/a.png' }, { cookie })
+  await post('/admin/projects', { title: 'Still One', link: 'https://still.example/', published: 'on', image: '/public/b.png' }, { cookie })
+  const r = await get('/work/live-one')
+  assert.match(r.headers.get('content-security-policy'), /frame-src 'self' https:/)
+  const live = await r.text()
+  assert.match(live, /<iframe src="https:\/\/live.example\/"/)
+  assert.ok(!live.includes('class="hero"'), 'the live site replaces the cover')
+  const still = await (await get('/work/still-one')).text()
+  assert.ok(!still.includes('<iframe'))
+  assert.match(still, /class="hero" src="\/public\/b.png"/)
+  // the 404 page lists the work too, and only the marked row carries the live URL
+  const missing = await (await get('/nope')).text()
+  assert.match(missing, /href="\/work\/live-one" data-cover="\/public\/a.png" data-live="https:\/\/live.example\/"/)
+  assert.match(missing, /href="\/work\/still-one" data-cover="\/public\/b.png">/)
+})
+
 test('contact form validates, stores, and rate-limits by address', async () => {
   assert.equal((await post('/contact', { email: 'not-an-email', body: 'hi' })).status, 400)
   const hp = await post('/contact', { email: 'a@b.co', body: 'spam', website: 'http://spam' })

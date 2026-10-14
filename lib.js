@@ -83,7 +83,8 @@ export const SCHEMA = `
     id integer primary key, title text not null default '', slug text unique,
     summary text default '', description text default '', image text default '',
     tags text default '', link text default '', repo text default '', year text default '',
-    featured integer default 0, published integer default 1, position integer default 0);
+    featured integer default 0, published integer default 1, position integer default 0,
+    embed integer default 0);
   create table if not exists experience (
     id integer primary key, role text default '', company text default '', period text default '',
     location text default '', description text default '', position integer default 0);
@@ -100,6 +101,20 @@ export const SCHEMA = `
     image text default '', linkedin_url text default '', published_at text default '',
     published integer default 1, position integer default 0);
 `
+
+// Columns added after the first release. CREATE TABLE IF NOT EXISTS skips tables that
+// already exist, so older databases get these with ALTER TABLE.
+export const ADDED_COLUMNS = [
+  ['messages', 'reply', "text default ''"],
+  ['messages', 'replied', "text default ''"],
+  ['projects', 'embed', 'integer default 0'],
+]
+export const addColumns = async db => {
+  for (const [t, c, def] of ADDED_COLUMNS) {
+    const { rows } = await db.execute(`pragma table_info(${t})`)
+    if (!rows.some(r => r.name === c)) await db.execute(`alter table ${t} add column ${c} ${def}`)
+  }
+}
 
 /* ---------- GitHub contributions ----------
    Parses the public calendar at github.com/users/<name>/contributions (no token

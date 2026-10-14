@@ -68,6 +68,11 @@ main{max-width:var(--w);margin:0 auto;padding:0 var(--gut)}
   opacity:0;scale:.96;transition:opacity .18s,scale .25s cubic-bezier(.22,.61,.36,1);will-change:transform}
 .peek img{width:100%;height:100%;object-fit:cover;display:block}
 .peek.on{opacity:1;scale:1}
+.peek.live{width:400px;overflow:hidden}
+.peek iframe{position:absolute;left:0;top:0;width:1280px;height:800px;border:0;transform:scale(.3125);
+  transform-origin:0 0;opacity:0;visibility:hidden;transition:opacity .3s}
+.peek iframe.show{visibility:visible}
+.peek iframe.show.ok{opacity:1}
 
 /* ---- intro ---- */
 .intro{padding:88px 0 72px;max-width:900px}
@@ -111,15 +116,15 @@ h1{font:700 clamp(44px,8.2vw,86px)/1.02 var(--sans);letter-spacing:-.045em}
 .row{display:grid;grid-template-columns:1fr auto;gap:32px;align-items:center;
   padding:26px 16px;border-bottom:1px solid var(--line);margin:0 -16px;
   transition:background .15s,color .15s}
-.row:hover{background:var(--ink);color:var(--bg)}
+/* a faint tint on hover; inverting the row flashed a bright block in dark mode */
+.row:hover{background:color-mix(in srgb,var(--ink) 5%,var(--bg))}
 .row-t{display:block;min-width:0}
 .row-t b{font:600 24px/1.2 var(--sans);letter-spacing:-.025em;display:block}
 .row-t em{display:block;margin-top:7px;font-style:normal;font-size:15px;color:var(--mid)}
-.row:hover .row-t em{color:var(--bg);opacity:.72}
 .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:13px}
 .tags i{font:500 10.5px/1 var(--mono);font-style:normal;text-transform:uppercase;
   letter-spacing:.06em;border:1px solid var(--line);padding:5px 7px;color:var(--mut)}
-.row:hover .tags i{border-color:color-mix(in srgb,var(--bg) 45%,transparent);color:var(--bg)}
+.row:hover .tags i{border-color:color-mix(in srgb,var(--ink) 30%,transparent);color:var(--mid)}
 .row-m{display:flex;align-items:center;gap:20px}
 .row-m img{width:180px;height:112px;object-fit:cover;border:1px solid var(--line);transition:filter .25s,opacity .25s}
 /* muted, not hidden: enough colour to read the work at a glance, full colour on hover.
@@ -130,9 +135,8 @@ h1{font:700 clamp(44px,8.2vw,86px)/1.02 var(--sans);letter-spacing:-.045em}
 }
 .row-m .ph{width:180px;height:112px;border:1px solid var(--line);display:block}
 .yr{font:500 12px/1 var(--mono);color:var(--mut)}
-.row:hover .yr{color:var(--bg);opacity:.7}
 .arw{font-size:17px;color:var(--mut);transition:transform .25s cubic-bezier(.22,.61,.36,1)}
-.row:hover .arw{color:var(--bg);transform:translateX(5px)}
+.row:hover .arw{color:var(--accent);transform:translateX(5px)}
 .empty{color:var(--mut);font-size:15px}
 .empty a{border-bottom:1px solid currentColor}
 
@@ -252,6 +256,18 @@ h2.big{font:700 clamp(38px,6.4vw,68px)/1.03 var(--sans);letter-spacing:-.045em;m
 .caseMeta dd i{font:500 11px/1 var(--mono);font-style:normal;border:1px solid var(--line);padding:5px 7px}
 .caseMeta a{border-bottom:1px solid var(--accent);font-size:14px}
 img.hero{border:1px solid var(--line);margin:34px 0}
+.livebox{margin:34px 0;border:1px solid var(--line);background:var(--field)}
+.livebox figcaption{display:flex;align-items:center;gap:14px;padding:9px 12px;border-bottom:1px solid var(--line);
+  font:500 11.5px/1 var(--mono);color:var(--mut)}
+.livebox figcaption a:hover{color:var(--ink)}
+.dots{display:flex;gap:5px}
+.dots i{width:8px;height:8px;border-radius:50%;background:var(--line)}
+.liveframe{position:relative;overflow:hidden;aspect-ratio:16/10;background:center/cover no-repeat}
+.liveframe iframe{position:absolute;left:0;top:0;width:100%;height:100%;border:0;transform-origin:0 0;
+  opacity:0;transition:opacity .4s}
+.liveframe.ok iframe{opacity:1}
+/* without the script the frame is never fitted or revealed, so show it as is */
+:root:not(.js) .liveframe iframe{opacity:1}
 .prose.wide{max-width:none;font-size:16.5px}
 .next{margin-top:48px;padding-top:26px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:14px 32px}
 .next a{font:500 13px/1 var(--mono);border-bottom:1px solid var(--accent);padding-bottom:3px}
@@ -293,7 +309,6 @@ img.hero{border:1px solid var(--line);margin:34px 0}
 .live-pill.up{color:#16a34a;border-color:color-mix(in srgb,#16a34a 40%,transparent)}
 .live-pill.up:before{animation:pulse 2.4s ease-in-out infinite}
 .live-pill.down{color:#d63b2f;border-color:color-mix(in srgb,#d63b2f 40%,transparent)}
-.row:hover .live-pill{color:var(--bg);border-color:color-mix(in srgb,var(--bg) 45%,transparent)}
 
 /* ---- last shipped ---- */
 .shipped{margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:14px;color:var(--mut)}

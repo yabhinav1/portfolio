@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { createClient } from '@libsql/client'
 import { put, get as blobGet } from '@vercel/blob'
 import { Readable } from 'node:stream'
-import { esc, slugify, fill, SCHEMA, parseContributions, streaks } from './lib.js'
+import { esc, slugify, fill, SCHEMA, addColumns, parseContributions, streaks } from './lib.js'
 import { notifyNew, sendMail } from './notify.js'
 import { homePage, projectPage, notFound, notesPage, notePage, resumePage, SCRIPT } from './views/site.js'
 import { adminList, adminForm, adminSettings, adminInbox, loginPage } from './views/admin.js'
@@ -267,6 +267,7 @@ const ENTITIES = {
       { n: 'image', l: 'Cover image', t: 'image' },
       { n: 'tags', l: 'Tags', t: 'text', hint: 'Comma separated: React, Postgres, Figma' },
       { n: 'link', l: 'Live URL', t: 'text' },
+      { n: 'embed', l: 'Show the live site in previews', t: 'bool', hint: 'Runs the Live URL in the hover preview and on the project page, in place of the cover. Only works for sites that allow embedding (no X-Frame-Options).' },
       { n: 'repo', l: 'Repo URL', t: 'text' },
       { n: 'year', l: 'Year', t: 'text' },
       { n: 'slug', l: 'URL slug', t: 'text', hint: 'Leave blank to generate from the title.' },
@@ -320,10 +321,7 @@ const PUBLISHED = 'select * from projects where published = 1 order by position 
 const init = async () => {
   if (!TURSO) await client.execute('pragma journal_mode = WAL')   // local file only
   await client.executeMultiple(SCHEMA)
-  // add reply columns to databases created before they existed
-  const cols = (await all('pragma table_info(messages)')).map(c => c.name)
-  for (const [c, def] of [['reply', "text default ''"], ['replied', "text default ''"]])
-    if (!cols.includes(c)) await run(`alter table messages add column ${c} ${def}`)
+  await addColumns(client)
   if ((await get('select count(*) c from projects')).c) return
   const proj = `insert into projects (title,slug,summary,description,tags,year,featured,published,position)
     values (?,?,?,?,?,?,?,1,?)`
@@ -387,6 +385,8 @@ const csp = admin => [
   "font-src 'self'",
   "connect-src 'self'",
   "form-action 'self'",
+  // projects marked "show the live site" are embedded from their own domains
+  `frame-src ${admin ? "'self'" : "'self' https:"}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "object-src 'none'",

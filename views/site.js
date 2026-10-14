@@ -127,12 +127,57 @@ export const SCRIPT = {
       const y = Math.max(16, Math.min(py - h / 2, innerHeight - h - 16))
       peek.style.transform = 'translate(' + x + 'px,' + y + 'px)'
     }
-    document.querySelectorAll('.row[data-cover]').forEach(row => {
-      row.addEventListener('pointerenter', e => { pimg.src = row.dataset.cover; px = e.clientX; py = e.clientY; place(); peek.classList.add('on') })
+    // A project marked "show the live site" runs the site itself, at desktop size scaled
+    // down, over its cover. Each frame starts loading when the pointer first reaches the
+    // list and is kept afterwards, so hovering again is instant.
+    const frames = new Map()
+    const frameFor = row => {
+      let f = frames.get(row)
+      if (!f) {
+        f = document.createElement('iframe')
+        f.src = row.dataset.live
+        f.tabIndex = -1
+        f.setAttribute('aria-hidden', 'true')
+        f.setAttribute('sandbox', 'allow-scripts allow-same-origin')
+        f.addEventListener('load', () => f.classList.add('ok'))
+        peek.appendChild(f)
+        frames.set(row, f)
+      }
+      return f
+    }
+    document.querySelectorAll('.rows').forEach(rows => rows.addEventListener('pointerenter',
+      () => rows.querySelectorAll('.row[data-live]').forEach(frameFor), { once: true }))
+    document.querySelectorAll('.row[data-cover], .row[data-live]').forEach(row => {
+      row.addEventListener('pointerenter', e => {
+        const f = row.dataset.live ? frameFor(row) : null
+        frames.forEach(x => x.classList.toggle('show', x === f))
+        peek.classList.toggle('live', !!f)
+        pimg.hidden = !row.dataset.cover
+        if (row.dataset.cover) pimg.src = row.dataset.cover
+        px = e.clientX; py = e.clientY; place(); peek.classList.add('on')
+      })
       row.addEventListener('pointermove', e => { px = e.clientX; py = e.clientY; if (!raf) raf = requestAnimationFrame(place) })
       row.addEventListener('pointerleave', () => peek.classList.remove('on'))
     })
   }
+
+  // A project page that runs its live site: desktop size scaled to fit the column, or
+  // phone size on a narrow screen, so the site lays itself out the way it would there.
+  // The cover shows underneath until the site has loaded.
+  document.querySelectorAll('.liveframe').forEach(box => {
+    const f = box.querySelector('iframe')
+    const ok = () => box.classList.add('ok')
+    f.addEventListener('load', ok)
+    setTimeout(ok, 6000)
+    const fit = () => {
+      const w = box.clientWidth, phone = w < 600
+      const vw = phone ? 390 : 1280, vh = phone ? 760 : 800, s = w / vw
+      f.style.width = vw + 'px'; f.style.height = vh + 'px'; f.style.transform = 'scale(' + s + ')'
+      box.style.height = Math.round(vh * s) + 'px'
+    }
+    fit()
+    if ('ResizeObserver' in window) new ResizeObserver(fit).observe(box)
+  })
 
   // GitHub-style tooltip on the contribution calendar: instant, above the square,
   // on hover or tap. The calendar scrolls to today on narrow screens, like GitHub.
@@ -267,8 +312,12 @@ const timeAgo = iso => {
   return m < 2 ? 'just now' : m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} hours ago` : `${Math.round(m / 1440)} days ago`
 }
 
+// The site to embed in place of the cover, when the admin turned that on. https only,
+// since the page itself is served over https and the policy allows only https frames.
+const embedUrl = p => Number(p.embed) && /^https:\/\//i.test(p.link || '') ? p.link : ''
+
 const workRow = (p, st, live) => `
-<a class="row" href="/work/${esc(p.slug)}"${p.image ? ` data-cover="${esc(p.image)}"` : ''}>
+<a class="row" href="/work/${esc(p.slug)}"${p.image ? ` data-cover="${esc(p.image)}"` : ''}${embedUrl(p) ? ` data-live="${esc(embedUrl(p))}"` : ''}>
   <span class="row-t">
     <b>${esc(p.title)}${livePill(live?.[p.slug])}</b>
     ${p.summary ? `<em>${esc(fill(p.summary, st))}</em>` : ''}
@@ -413,7 +462,13 @@ export const projectPage = ({ s, p, next, stats = {}, all = [] }) => layout({
     ${p.link ? `<div><dt>Live</dt><dd><a href="${esc(p.link)}" target="_blank" rel="noopener">Visit site →</a></dd></div>` : ''}
     ${p.repo ? `<div><dt>Code</dt><dd><a href="${esc(p.repo)}" target="_blank" rel="noopener">Repository →</a></dd></div>` : ''}
   </div>
-  ${p.image ? `<img class="hero" src="${esc(p.image)}" alt="${esc(p.title)}">` : ''}
+  ${embedUrl(p) ? `<figure class="livebox">
+    <figcaption><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><a href="${esc(embedUrl(p))}" target="_blank" rel="noopener">${esc(embedUrl(p).replace(/^https:\/\/(www\.)?/i, '').replace(/\/$/, ''))} ↗</a></figcaption>
+    <div class="liveframe"${p.image ? ` style="background-image:url('${esc(p.image)}')"` : ''}>
+      <iframe src="${esc(embedUrl(p))}" title="${esc(p.title)}, live" loading="lazy" referrerpolicy="strict-origin-when-cross-origin"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"></iframe>
+    </div>
+  </figure>` : p.image ? `<img class="hero" src="${esc(p.image)}" alt="${esc(p.title)}">` : ''}
   <div class="prose wide">${md(fill(p.description, stats))}</div>
   <p class="next">${next ? `<a href="/work/${esc(next.slug)}">Next: ${esc(next.title)} →</a>` : ''}
     <a href="/#contact">Building something like it? Get in touch →</a></p>
