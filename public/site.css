@@ -72,7 +72,7 @@ main{max-width:var(--w);margin:0 auto;padding:0 var(--gut)}
 .peek iframe{position:absolute;left:0;top:0;width:1280px;height:800px;border:0;transform:scale(.3125);
   transform-origin:0 0;opacity:0;visibility:hidden;transition:opacity .3s}
 .peek iframe.show{visibility:visible}
-.peek iframe.show.ok{opacity:1}
+.peek iframe.show.loaded{opacity:1}
 
 /* ---- intro ---- */
 .intro{padding:88px 0 72px;max-width:900px}
@@ -262,10 +262,10 @@ img.hero{border:1px solid var(--line);margin:34px 0}
 .livebox figcaption a:hover{color:var(--ink)}
 .dots{display:flex;gap:5px}
 .dots i{width:8px;height:8px;border-radius:50%;background:var(--line)}
-.liveframe{position:relative;overflow:hidden;aspect-ratio:16/10;background:center/cover no-repeat}
+.liveframe{position:relative;width:100%;overflow:hidden;aspect-ratio:16/10;background:center/cover no-repeat}
 .liveframe iframe{position:absolute;left:0;top:0;width:100%;height:100%;border:0;transform-origin:0 0;
   opacity:0;transition:opacity .4s}
-.liveframe.ok iframe{opacity:1}
+.liveframe.loaded iframe{opacity:1}
 /* without the script the frame is never fitted or revealed, so show it as is */
 :root:not(.js) .liveframe iframe{opacity:1}
 .prose.wide{max-width:none;font-size:16.5px}

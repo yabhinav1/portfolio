@@ -139,7 +139,7 @@ export const SCRIPT = {
         f.tabIndex = -1
         f.setAttribute('aria-hidden', 'true')
         f.setAttribute('sandbox', 'allow-scripts allow-same-origin')
-        f.addEventListener('load', () => f.classList.add('ok'))
+        f.addEventListener('load', () => f.classList.add('loaded'))
         peek.appendChild(f)
         frames.set(row, f)
       }
@@ -166,14 +166,16 @@ export const SCRIPT = {
   // The cover shows underneath until the site has loaded.
   document.querySelectorAll('.liveframe').forEach(box => {
     const f = box.querySelector('iframe')
-    const ok = () => box.classList.add('ok')
-    f.addEventListener('load', ok)
-    setTimeout(ok, 6000)
+    const loaded = () => box.classList.add('loaded')
+    f.addEventListener('load', loaded)
+    setTimeout(loaded, 6000)
+    // Only the width is read and only the ratio is set: setting the box's height here
+    // fed back into its width through aspect-ratio, and the frame grew on every resize.
     const fit = () => {
       const w = box.clientWidth, phone = w < 600
-      const vw = phone ? 390 : 1280, vh = phone ? 760 : 800, s = w / vw
-      f.style.width = vw + 'px'; f.style.height = vh + 'px'; f.style.transform = 'scale(' + s + ')'
-      box.style.height = Math.round(vh * s) + 'px'
+      const vw = phone ? 390 : 1280, vh = phone ? 760 : 800
+      f.style.width = vw + 'px'; f.style.height = vh + 'px'; f.style.transform = 'scale(' + w / vw + ')'
+      box.style.aspectRatio = vw + '/' + vh
     }
     fit()
     if ('ResizeObserver' in window) new ResizeObserver(fit).observe(box)
