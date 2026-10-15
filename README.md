@@ -188,7 +188,7 @@ Back up `portfolio.db` and `uploads/` together; they're the whole site.
 
 ## Live stats
 
-Project text can embed `{{servers}}`, `{{users}}`, `{{users_k}}` and `{{ping}}`.
+Project text can embed `{{servers}}`, `{{servers_round}}` ("nearly 500", then "500+" once it is true), `{{users}}`, `{{users_k}}` and `{{ping}}`.
 They are filled at render from `annie.monster/api/status`, cached in the settings
 table and refreshed in the background once the stored copy is older than six
 hours. The one request that finds the copy stale refreshes it inline with a short

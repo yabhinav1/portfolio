@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { createClient } from '@libsql/client'
 import { put, get as blobGet } from '@vercel/blob'
 import { Readable } from 'node:stream'
-import { esc, slugify, fill, SCHEMA, addColumns, parseContributions, streaks } from './lib.js'
+import { esc, slugify, fill, round, SCHEMA, addColumns, parseContributions, streaks } from './lib.js'
 import { notifyNew, sendMail } from './notify.js'
 import { homePage, projectPage, notFound, notesPage, notePage, resumePage, SCRIPT } from './views/site.js'
 import { adminList, adminForm, adminSettings, adminInbox, loginPage } from './views/admin.js'
@@ -123,6 +123,7 @@ const shape = (s) => {
   return {
     servers: n(s.stat_servers), users: n(s.stat_users), ping: s.stat_ping || '',
     users_k: Math.floor(Number(s.stat_users || 0) / 1000) + 'k',
+    servers_round: round(Number(s.stat_servers || 0)),
     raw_servers: Number(s.stat_servers || 0), raw_users: Number(s.stat_users || 0),
   }
 }

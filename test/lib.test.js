@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { esc, md, slugify, fill, list } from '../lib.js'
+import { esc, md, slugify, fill, list, round } from '../lib.js'
 
 test('esc neutralises every HTML special character', () => {
   assert.equal(esc(`<a href="x" title='y'>&</a>`), '&lt;a href=&quot;x&quot; title=&#39;y&#39;&gt;&amp;&lt;/a&gt;')
@@ -85,4 +85,14 @@ test('text saved from a textarea (\\r\\n, trailing spaces) still renders images 
   assert.match(out, /<figure class="diagram">/)
   assert.ok(!out.includes('\r'))
   assert.match(out, /<p>One<br>two<\/p>$/)
+})
+
+test('round never claims more than the real count', () => {
+  assert.equal(round(492), 'nearly 500')
+  assert.equal(round(500), '500+')
+  assert.equal(round(560), '500+')
+  assert.equal(round(589), '500+')
+  assert.equal(round(590), 'nearly 600')
+  assert.equal(round(1240), '1,000+')
+  assert.equal(round(42), '42')
 })

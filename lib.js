@@ -77,6 +77,14 @@ export const slugify = s => String(s || '').toLowerCase().trim()
 export const fill = (text, vars) => String(text ?? '').replace(/\{\{(\w+)\}\}/g,
   (m, k) => (k in vars ? vars[k] : m))
 
+// A count for prose that never claims more than is true: 492 is "nearly 500" until it
+// really passes 500, then "500+". Small counts are shown as they are.
+export const round = n => {
+  if (n < 100) return String(n)
+  const step = n < 1000 ? 100 : 1000, below = Math.floor(n / step) * step, next = below + step
+  return n >= next - step / 10 ? `nearly ${next.toLocaleString('en-US')}` : `${below.toLocaleString('en-US')}+`
+}
+
 export const list = s => String(s || '').split(',').map(x => x.trim()).filter(Boolean)
 
 // shared with push-content.js
