@@ -57,6 +57,9 @@ test('homepage renders the seed content with security headers', async () => {
   assert.match(csp, /script-src 'sha256-[^']+' 'sha256-[^']+';/, 'public pages allow only the two hashed scripts')
   assert.ok(!/script-src[^;]*unsafe-inline/.test(csp))
   assert.ok(!html.includes('fonts.googleapis.com'), 'fonts are self-hosted')
+  // a Cloudflare proxy in front would otherwise swap the email for "[email protected]"
+  // and need a script the CSP blocks
+  assert.match(html, /<body[^>]*><!--email_off-->[\s\S]*<!--\/email_off--><\/body>/)
 })
 
 test('inline script hashes match what the page actually ships', async () => {

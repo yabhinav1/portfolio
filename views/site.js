@@ -266,13 +266,13 @@ ${abs(s, image || s.og_image || s.avatar) ? `<meta property="og:image" content="
 <meta name="view-transition" content="same-origin">
 <script>${SCRIPT.flag}</script>
 <style>:root{--accent:${esc(s.accent || '#b0451f')}}</style>
-</head><body class="${cls}"><a class="skip" href="#main">Skip to content</a>${body}
+</head><body class="${cls}"><!--email_off--><a class="skip" href="#main">Skip to content</a>${body}
 <div class="cmdk" hidden role="dialog" aria-modal="true" aria-label="Jump to">
   <div class="cmdk-box"><input type="text" placeholder="Jump to a project, page or action…" aria-label="Search" autocomplete="off" spellcheck="false">
   <ul role="listbox"></ul><p class="cmdk-foot"><span>↑↓ to move · ↵ to open · esc to close</span></p></div></div>
 <script type="application/json" id="pal">${palette(s, projects)}</script>
 <script>${SCRIPT.main}</script>
-</body></html>`
+<!--/email_off--></body></html>`
 
 const header = s => `
 <header class="bar">
@@ -534,7 +534,7 @@ export const resumePage = ({ s, stats = {}, projects, experience, skills }) => {
 <title>${esc(s.name)}, résumé</title><meta name="description" content="${esc(summary)}">
 <link rel="preload" href="/public/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/public/site.css?v=${V.site}">
-<script>${SCRIPT.flag}</script></head><body class="cv-body">
+<script>${SCRIPT.flag}</script></head><body class="cv-body"><!--email_off-->
 <div class="cv-bar"><a href="/">← ${esc(s.name)}</a><span><a href="/public/resume.pdf" download>Download PDF</a><button type="button" data-print>Print</button></span></div>
 <main class="cv">
   <header class="cv-head"><h1>${esc(s.name)}</h1><p class="cv-role">${esc(s.role)}${s.location ? ` · ${esc(s.location)}` : ''}</p>
@@ -549,7 +549,7 @@ export const resumePage = ({ s, stats = {}, projects, experience, skills }) => {
     ${p.link || p.repo ? `<div class="cv-sub">${[p.link, p.repo].filter(Boolean).map(u => `<a href="${esc(u)}">${esc(u.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''))}</a>`).join(' · ')}</div>` : ''}</div>`).join('')}</section>` : ''}
   ${skills.length ? `<section><h2>Skills</h2>${skills.map(g => `<div class="cv-skill"><b>${esc(g.label)}</b><span>${list(g.items).map(esc).join(', ')}</span></div>`).join('')}</section>` : ''}
   ${edu.length ? `<section><h2>Education</h2>${edu.map(l => `<div class="cv-item"><div class="cv-line"><b>${esc(l)}</b></div></div>`).join('')}</section>` : ''}
-</main><script>${SCRIPT.main}</script></body></html>`
+</main><script>${SCRIPT.main}</script><!--/email_off--></body></html>`
 }
 
 // A dead end that offers the work instead: the project list doubles as the menu.
