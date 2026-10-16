@@ -23,7 +23,7 @@ jobs:
         id: diff
         run: |
           # Hash the page without the stylesheet version, which changes on every CSS edit.
-          new=$(curl -fsS https://yabhinav.dpdns.org/resume | sed 's/site\.css?v=[a-z0-9]*//' | sha256sum | cut -c1-16)
+          new=$(curl -fsS https://yabhinav.is-a.dev/resume | sed 's/site\.css?v=[a-z0-9]*//' | sha256sum | cut -c1-16)
           old=$(cat .github/resume.hash 2>/dev/null || true)
           echo "new=$new" >> "$GITHUB_OUTPUT"
           if [ "$new" = "$old" ] && [ -s public/resume.pdf ] && [ "${{ github.event_name }}" != workflow_dispatch ]; then
@@ -36,7 +36,7 @@ jobs:
         if: steps.diff.outputs.changed == 'yes'
         run: |
           google-chrome --headless=new --disable-gpu --no-sandbox --no-pdf-header-footer \
-            --virtual-time-budget=6000 --print-to-pdf=public/resume.pdf https://yabhinav.dpdns.org/resume
+            --virtual-time-budget=6000 --print-to-pdf=public/resume.pdf https://yabhinav.is-a.dev/resume
           test "$(stat -c %s public/resume.pdf)" -gt 10000
           echo "${{ steps.diff.outputs.new }}" > .github/resume.hash
 
