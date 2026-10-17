@@ -153,6 +153,32 @@ test('contact form validates, stores, and rate-limits by address', async () => {
   assert.ok(!inbox.includes('spam'), 'honeypot submissions are not stored')
 })
 
+test('the redesigned site can send its contact form and read JSON back; other origins cannot', async () => {
+  const partner = { origin: 'https://abhinavyadav.is-a.dev', accept: 'application/json', 'x-forwarded-for': '10.9.0.1' }
+  const ok = await post('/contact', { name: 'P', email: 'p@q.co', body: 'hello from the new site' }, partner)
+  assert.equal(ok.status, 200)
+  assert.equal(ok.headers.get('access-control-allow-origin'), 'https://abhinavyadav.is-a.dev')
+  assert.deepEqual(await ok.json(), { ok: true })
+  const bad = await post('/contact', { email: 'nope', body: 'x' }, partner)
+  assert.equal(bad.status, 400)
+  assert.equal((await bad.json()).ok, false)
+  // an unknown site keeps the plain form flow and gets no CORS grant
+  const other = await post('/contact', { email: 'o@q.co', body: 'hi' }, { ...partner, origin: 'https://evil.example', 'x-forwarded-for': '10.9.0.2' })
+  assert.equal(other.status, 302)
+  assert.equal(other.headers.get('access-control-allow-origin'), null)
+  const inbox = await (await get('/admin/messages', { cookie: await login() })).text()
+  assert.match(inbox, /hello from the new site/)
+})
+
+test('stats.json gives the redesigned site live numbers, last shipped and notes', async () => {
+  const r = await get('/stats.json', { origin: 'http://127.0.0.1:4173' })
+  assert.equal(r.status, 200)
+  assert.equal(r.headers.get('access-control-allow-origin'), 'http://127.0.0.1:4173')
+  const j = await r.json()
+  assert.ok('annie' in j && 'shipped' in j && Array.isArray(j.notes))
+  assert.equal((await get('/stats.json', { origin: 'https://evil.example' })).headers.get('access-control-allow-origin'), null)
+})
+
 test('login attempts are capped at 10 per address', async () => {
   // 2 attempts have been spent above (one wrong, one right)
   for (let i = 0; i < 8; i++) await post('/admin/login', { password: 'nope' })

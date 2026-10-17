@@ -463,6 +463,30 @@ app.get('/stats/linkedin.json', async (_req, res) => {
 /* ---------- public site ---------- */
 const NOTES = "select * from notes where published = 1 order by published_at desc, id desc"
 
+/* ---------- the redesigned portfolio on abhinavyadav.is-a.dev ----------
+   That site is static, so it reads live numbers from here and sends its contact form
+   here. Only these origins may read the responses; the local one is its dev server. */
+const PARTNER_ORIGINS = new Set(['https://abhinavyadav.is-a.dev', 'http://127.0.0.1:4173', 'http://localhost:4173'])
+function allowPartner(req, res) {
+  const origin = req.get('origin')
+  res.vary('Origin')
+  if (!origin || !PARTNER_ORIGINS.has(origin)) return false
+  res.set('Access-Control-Allow-Origin', origin)
+  return true
+}
+app.get('/stats.json', async (req, res) => {
+  allowPartner(req, res)
+  const { s, stats } = await context()
+  const [shipped, notes] = await Promise.all([shippedFor(s), all(NOTES)])
+  res.set('Cache-Control', 'public, max-age=300').json({
+    annie: stats.raw_servers
+      ? { servers: stats.raw_servers, users: stats.raw_users, servers_round: stats.servers_round, users_k: stats.users_k }
+      : null,
+    shipped: shipped ? { repo: shipped.repo, msg: shipped.msg, url: shipped.url, at: shipped.at } : null,
+    notes: notes.slice(0, 3).map(n => ({ title: n.title, url: `${SITE}/notes/${n.slug}`, date: n.published_at })),
+  })
+})
+
 app.get('/', async (req, res) => {
   const { s, stats } = await context()
   const projects = await all(PUBLISHED)
@@ -547,16 +571,26 @@ ${notes.length ? `  <url><loc>${SITE}/notes</loc><priority>0.6</priority></url>\
 </urlset>`)
 })
 
+app.options('/contact', (req, res) => {
+  if (allowPartner(req, res)) res.set({ 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': 'Content-Type' })
+  res.sendStatus(204)
+})
 app.post('/contact', async (req, res) => {
-  if (await limited(`contact:${req.ip}`, 5, 3600e3)) return res.status(429).send('Too many messages. Try again later.')
+  // The redesigned site posts with fetch and wants JSON back, so it can confirm on its
+  // own page. Everyone else keeps the plain form flow and its redirect.
+  const json = allowPartner(req, res) && /application\/json/.test(req.get('accept') || '')
+  const reply = (status, error) => json
+    ? res.status(status).json(error ? { ok: false, error } : { ok: true })
+    : error ? res.status(status).send(error) : res.redirect('/?sent#contact')
+  if (await limited(`contact:${req.ip}`, 5, 3600e3)) return reply(429, 'Too many messages. Try again later.')
   const name = String(req.body.name || '').trim().slice(0, 120)
   const email = String(req.body.email || '').trim().slice(0, 200)
   const body = String(req.body.body || '').trim().slice(0, 5000)
-  if (req.body.website) return res.redirect('/?sent#contact')          // honeypot
-  if (!body || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).send('Please give a valid email and a message.')
+  if (req.body.website) return reply(200)          // honeypot
+  if (!body || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return reply(400, 'Please give a valid email and a message.')
   await run('insert into messages (name,email,body,created) values (?,?,?,?)', name, email, body, new Date().toISOString())
   await notifyNew({ name, email, body })      // never throws; a failed ping must not lose the message
-  res.redirect('/?sent#contact')
+  reply(200)
 })
 
 /* ---------- admin ---------- */
