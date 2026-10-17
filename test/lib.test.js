@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { esc, md, slugify, fill, list, round } from '../lib.js'
+import { esc, md, slugify, fill, list, round, newestShip } from '../lib.js'
 
 test('esc neutralises every HTML special character', () => {
   assert.equal(esc(`<a href="x" title='y'>&</a>`), '&lt;a href=&quot;x&quot; title=&#39;y&#39;&gt;&amp;&lt;/a&gt;')
@@ -95,4 +95,20 @@ test('round never claims more than the real count', () => {
   assert.equal(round(590), 'nearly 600')
   assert.equal(round(1240), '1,000+')
   assert.equal(round(42), '42')
+})
+
+test('last shipped takes the newest real commit across repos, not the most recently pushed repo', () => {
+  const commit = (msg, date, login = 'yabhinav1') => ({ html_url: `https://x/${msg}`, author: { login }, commit: { message: msg, author: { date }, committer: { date } } })
+  const ship = newestShip([
+    // pushed most recently (a Dependabot branch), but its newest commit is old
+    { repo: 'dailyos', commits: [commit('Make actions answer instantly', '2026-08-22T09:00:00Z')] },
+    { repo: 'portfolio', commits: [
+      commit('Refresh résumé PDF: new domain', '2026-10-16T13:00:00Z'),
+      commit('Bump next', '2026-10-16T12:55:00Z', 'dependabot[bot]'),
+      commit('Move the portfolio to yabhinav.is-a.dev\n\nbody', '2026-10-16T12:49:00Z'),
+    ] },
+  ])
+  assert.equal(ship.repo, 'portfolio')
+  assert.equal(ship.msg, 'Move the portfolio to yabhinav.is-a.dev')
+  assert.equal(newestShip([{ repo: 'a', commits: [commit('Merge branch x', '2026-10-01T00:00:00Z')] }]), null)
 })

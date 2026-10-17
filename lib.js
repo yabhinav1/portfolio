@@ -85,6 +85,23 @@ export const round = n => {
   return n >= next - step / 10 ? `nearly ${next.toLocaleString('en-US')}` : `${below.toLocaleString('en-US')}+`
 }
 
+// "Last shipped": housekeeping commits and the ones my own workflows make (PDF refresh,
+// backups, keepalives) don't count as shipping.
+export const HOUSEKEEPING = /^(Merge|Record |Stats:|Harvest|Topic:|Redeploy|Refresh résumé PDF|Backup |Keep the |Scheduled post|Audit:)/
+// The newest real commit across several repos. A repo's push time alone is misleading:
+// Dependabot pushing a branch makes a repo "recently pushed" while its newest commit
+// on the default branch is weeks old.
+export const newestShip = repos => {
+  let best = null
+  for (const { repo, commits } of repos) {
+    const c = commits.find(c => !HOUSEKEEPING.test(c.commit.message) && !/\[bot\]$/.test(c.author?.login || ''))
+    if (!c) continue
+    const at = c.commit.committer?.date || c.commit.author.date
+    if (!best || new Date(at) > new Date(best.at)) best = { repo, url: c.html_url, msg: c.commit.message.split('\n')[0].slice(0, 90), at }
+  }
+  return best
+}
+
 export const list = s => String(s || '').split(',').map(x => x.trim()).filter(Boolean)
 
 // shared with push-content.js

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { createClient } from '@libsql/client'
 import { put, get as blobGet } from '@vercel/blob'
 import { Readable } from 'node:stream'
-import { esc, slugify, fill, round, SCHEMA, addColumns, parseContributions, streaks } from './lib.js'
+import { esc, slugify, fill, round, newestShip, SCHEMA, addColumns, parseContributions, streaks } from './lib.js'
 import { notifyNew, sendMail } from './notify.js'
 import { homePage, projectPage, notFound, notesPage, notePage, resumePage, SCRIPT } from './views/site.js'
 import { adminList, adminForm, adminSettings, adminInbox, loginPage } from './views/admin.js'
@@ -224,22 +224,20 @@ const shippedFor = async (s) => {
   const user = ghUser(s)
   if (!user) return null
   if (Date.now() - Number(s.ship_at || 0) >= SHIP_TTL) {
-    // GitHub's events no longer carry commit messages, so: the most recently pushed
-    // public repo, then its newest commit that is not housekeeping.
+    // GitHub's events no longer carry commit messages, so: the few most recently pushed
+    // public repos, and the newest real commit across them (see newestShip).
     const gh = path => fetch(`https://api.github.com${path}`, {
       headers: { 'user-agent': 'portfolio', accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(4000) })
     try {
-      const rr = await gh(`/users/${user}/repos?sort=pushed&per_page=6`)
+      const rr = await gh(`/users/${user}/repos?sort=pushed&per_page=10`)
       if (!rr.ok) throw new Error(`repos ${rr.status}`)
-      const repo = (await rr.json()).find(r => !r.fork && !r.archived && r.name !== user)
-      if (repo) {
-        const cr = await gh(`/repos/${user}/${repo.name}/commits?per_page=10`)
-        if (!cr.ok) throw new Error(`commits ${cr.status}`)
-        // Skip housekeeping and the commits my own workflows make (PDF refresh, backups, keepalives).
-        const c = (await cr.json()).find(c => !/^(Merge|Record |Stats:|Harvest|Topic:|Redeploy|Refresh résumé PDF|Backup |Keep the |Scheduled post|Audit:)/.test(c.commit.message))
-        if (c) await setSetting('ship', JSON.stringify({ repo: repo.name, url: c.html_url,
-          msg: c.commit.message.split('\n')[0].slice(0, 90), at: c.commit.author.date }))
-      }
+      const repos = (await rr.json()).filter(r => !r.fork && !r.archived && r.name !== user).slice(0, 4)
+      const withCommits = await Promise.all(repos.map(async r => {
+        const cr = await gh(`/repos/${user}/${r.name}/commits?per_page=10`)
+        return { repo: r.name, commits: cr.ok ? await cr.json() : [] }
+      }))
+      const ship = newestShip(withCommits)
+      if (ship) await setSetting('ship', JSON.stringify(ship))
     } catch (e) { console.warn('last shipped failed:', e.message) }
     await setSetting('ship_at', String(Date.now()))
     s = await getSettings()
