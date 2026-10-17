@@ -311,7 +311,7 @@ const livePill = st => !st ? '' : st.up
 
 const timeAgo = iso => {
   const m = Math.round((Date.now() - new Date(iso)) / 60e3)
-  return m < 2 ? 'just now' : m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} hours ago` : `${Math.round(m / 1440)} days ago`
+  return m < 2 ? 'just now' : m < 60 ? `${m} min ago` : m < 90 ? '1 hour ago' : m < 2880 ? `${Math.round(m / 60)} hours ago` : `${Math.round(m / 1440)} days ago`
 }
 
 // The site to embed in place of the cover, when the admin turned that on. https only,
