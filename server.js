@@ -477,8 +477,13 @@ function allowPartner(req, res) {
 app.get('/stats.json', async (req, res) => {
   allowPartner(req, res)
   const { s, stats } = await context()
-  const [shipped, notes] = await Promise.all([shippedFor(s), all(NOTES)])
+  const [shipped, notes, github] = await Promise.all([shippedFor(s), all(NOTES), githubFor(s)])
   res.set('Cache-Control', 'public, max-age=300').json({
+    // the recent stretch of the contribution calendar, as [date, count, level 0-4]
+    github: github ? {
+      user: github.user, total: github.total, current: github.current, longest: github.longest,
+      days: github.days.slice(-16 * 7).map(x => [x.d, x.n, x.l]),
+    } : null,
     annie: stats.raw_servers
       ? { servers: stats.raw_servers, users: stats.raw_users, servers_round: stats.servers_round, users_k: stats.users_k }
       : null,

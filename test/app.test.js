@@ -175,7 +175,7 @@ test('stats.json gives the redesigned site live numbers, last shipped and notes'
   assert.equal(r.status, 200)
   assert.equal(r.headers.get('access-control-allow-origin'), 'http://127.0.0.1:4173')
   const j = await r.json()
-  assert.ok('annie' in j && 'shipped' in j && Array.isArray(j.notes))
+  assert.ok('annie' in j && 'shipped' in j && 'github' in j && Array.isArray(j.notes))
   assert.equal((await get('/stats.json', { origin: 'https://evil.example' })).headers.get('access-control-allow-origin'), null)
 })
 
